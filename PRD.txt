@@ -1,0 +1,802 @@
+# Product Requirements Document (PRD)
+
+# Swimming Club Attendance Tracking System
+
+---
+
+# 1. Product Overview
+
+## Product Name
+
+Swimming Club Attendance Tracking System
+
+---
+
+## Purpose
+
+A web-based attendance and membership tracking system for a swimming club. Members record attendance using their Student ID, and the system automatically generates a digital membership card after successful attendance submission.
+
+The system integrates with Google Sheets as the database and automatically validates membership status based on registration date.
+
+---
+
+## Goals
+
+* Simplify attendance taking
+* Reduce manual administrative work
+* Automatically validate memberships
+* Generate digital membership cards
+* Provide attendance reporting tools for admins
+* Use lightweight infrastructure with Google Sheets
+
+---
+
+# 2. Background & Problem Statement
+
+Current attendance management is manual and inefficient, causing:
+
+* Slow attendance registration
+* Human recording errors
+* Difficulty tracking active memberships
+* Difficulty generating reports
+
+The proposed system digitizes attendance and membership verification while keeping infrastructure simple and low-cost.
+
+---
+
+# 3. Scope
+
+## In Scope
+
+* Student ID attendance check-in
+* Automatic membership validation
+* Digital membership card generation
+* Membership expiration tracking
+* Google Sheets integration
+* Admin dashboard
+* Attendance filtering
+* Printable attendance reports
+
+---
+
+## Out of Scope
+
+* Payment integration
+* Mobile application
+* QR attendance scanning
+* Multi-club management
+* Push notifications
+
+---
+
+# 4. Users
+
+# 4.1 Club Member
+
+Members can:
+
+* Enter Student ID
+* Record attendance
+* View digital membership card
+* View membership status
+
+---
+
+# 4.2 Admin
+
+Admins can:
+
+* View attendance records
+* Filter attendance by date
+* Search attendance logs
+* Monitor expired memberships
+* Print attendance reports
+
+---
+
+# 5. Functional Requirements
+
+# 5.1 Member Attendance Check-In
+
+## Description
+
+Members record attendance by entering their Student ID into the attendance website.
+
+After successful submission, the system displays the member’s digital swimming club membership card.
+
+---
+
+## Attendance Workflow
+
+1. Member opens attendance page
+2. Member enters Student ID
+3. System searches Google Sheets database
+4. System validates membership
+5. Attendance is recorded
+6. Digital membership card is generated and displayed
+
+---
+
+## Attendance Page UI
+
+### Components
+
+* Club logo/header
+* Student ID input field
+* Submit button
+
+---
+
+## Example Interface
+
+```text id="m1t3lc"
+Enter Student ID
+
+[______________]
+
+[Submit]
+```
+
+---
+
+# 5.2 Digital Membership Card
+
+## Description
+
+After successful attendance submission, the system generates and displays a digital swimming club membership card.
+
+The card acts as:
+
+* Membership verification
+* Attendance confirmation
+* Member identity display
+
+---
+
+## Card Design Requirements
+
+The digital card should visually resemble a modern membership card with:
+
+* Metallic/dark themed background
+* Member ID displayed prominently
+* Membership dates
+* Membership type indicator
+* Club branding
+
+---
+
+## Card Information Displayed
+
+| Field             | Source                |
+| ----------------- | --------------------- |
+| Student ID        | Google Sheets         |
+| Full Name         | Google Sheets         |
+| Member Since      | Start time            |
+| Valid Thru        | Start time + 1 year   |
+| Membership Status | Active / Expired      |
+| Swimming Level    | Swimming Level column |
+
+---
+
+## Swimming Level Display
+
+The membership level section on the card displays the member’s swimming level from Google Sheets.
+
+Examples:
+
+* Beginner
+* Intermediate
+* Advanced
+
+---
+
+## Example Logic
+
+If Google Sheets contains:
+
+| Student ID | Swimming Level |
+| ---------- | -------------- |
+| 252UC2546J | Beginner       |
+
+Then the digital card displays:
+
+```text id="82d4p4"
+BEGINNER
+```
+
+---
+
+## Membership Card Conditions
+
+### Active Membership
+
+If membership is valid:
+
+* Digital card is displayed normally
+
+---
+
+### Expired Membership
+
+If membership expired:
+
+* Card displays:
+
+```text id="kg8trw"
+Membership Expired
+```
+
+* Card may visually indicate expired status
+
+---
+
+# 5.3 Membership Expiration Logic
+
+## Registration Date Source
+
+The system uses:
+
+```text id="k78dbf"
+Start time
+```
+
+from Google Form responses as the official registration date.
+
+---
+
+## Expiry Calculation
+
+```text id="wq0wq5"
+Membership Expiry Date = Start time + 1 Year
+```
+
+---
+
+## Membership Conditions
+
+### Active Membership
+
+Condition:
+
+```text id="0r87a2"
+Current Date <= Expiry Date
+```
+
+Display:
+
+```text id="4xg0nb"
+Membership Active
+```
+
+---
+
+### Expired Membership
+
+Condition:
+
+```text id="zy5cv8"
+Current Date > Expiry Date
+```
+
+Display:
+
+```text id="p3vwfw"
+Membership Expired
+```
+
+---
+
+# 5.4 Google Sheets Database Integration
+
+## Description
+
+Google Sheets acts as the system database.
+
+The system connects using:
+
+* Google Sheets API
+  OR
+* Google Apps Script
+
+---
+
+# Google Sheets Structure
+
+# 1. Registration Responses Sheet
+
+Stores member registration data from Google Forms.
+
+---
+
+## Sheet Structure
+
+| Column                   | Description                        |
+| ------------------------ | ---------------------------------- |
+| Id                       | Form response ID                   |
+| Start time               | Registration timestamp             |
+| Completion time          | Form completion timestamp          |
+| Email                    | Member email                       |
+| Name                     | Form-entered name                  |
+| Language                 | Preferred language                 |
+| Student ID               | Unique member ID                   |
+| Full Name                | Official member name               |
+| Preferred Name           | Preferred display name             |
+| Gender                   | Member gender                      |
+| Swimming Level           | Beginner / Intermediate / Advanced |
+| Faculty                  | University faculty                 |
+| Contact Number           | Phone number                       |
+| Emergency Contact Number | Emergency contact                  |
+| Health Issues            | Declared medical issues            |
+
+---
+
+## Required Fields Used by System
+
+| Field          | Purpose                  |
+| -------------- | ------------------------ |
+| Student ID     | Unique identifier        |
+| Full Name      | Membership card display  |
+| Start time     | Registration date        |
+| Swimming Level | Membership level display |
+| Faculty        | Attendance reporting     |
+
+---
+
+# Optional Additional Columns
+
+| Column            | Purpose                     |
+| ----------------- | --------------------------- |
+| Expiry Date       | Calculated expiry date      |
+| Membership Status | Active / Expired            |
+| Last Attendance   | Latest attendance timestamp |
+
+---
+
+# 2. Attendance Sheet
+
+Separate tab named:
+
+```text id="j1vux0"
+Attendance
+```
+
+stores attendance logs.
+
+---
+
+## Attendance Sheet Structure
+
+| Timestamp        | Student ID | Full Name       | Faculty | Membership Status |
+| ---------------- | ---------- | --------------- | ------- | ----------------- |
+| 2026-05-16 08:30 | 252UC2546J | Chen Chee Chuen | FCI     | Active            |
+
+---
+
+# 5.5 Attendance Validation Rules
+
+# Valid Student ID
+
+If Student ID exists:
+
+* Attendance recorded successfully
+
+---
+
+# Invalid Student ID
+
+Display:
+
+```text id="gl2l0p"
+Student ID Not Found
+```
+
+---
+
+# Duplicate Attendance Prevention
+
+The system prevents:
+
+* Multiple attendance submissions on the same day by the same member
+
+---
+
+# Expired Membership
+
+Attendance may still be recorded depending on admin settings.
+
+---
+
+# 5.6 Admin Dashboard
+
+## Description
+
+Admins manage attendance and reporting through an admin dashboard.
+
+---
+
+## Dashboard Features
+
+### Attendance Viewing
+
+Admins can:
+
+* View attendance logs
+* Search records
+
+---
+
+### Attendance Filtering
+
+Filter attendance by:
+
+* Start date
+* End date
+* Student ID
+* Faculty
+* Membership status
+
+---
+
+### Membership Monitoring
+
+Admins can:
+
+* View expired memberships
+* Monitor upcoming expirations
+
+---
+
+### Attendance Summary
+
+Dashboard displays:
+
+* Total attendance
+* Active members
+* Expired members
+
+---
+
+# 5.7 Printable Reports
+
+## Description
+
+Admins can generate printable attendance reports.
+
+---
+
+## Report Contents
+
+Reports include:
+
+* Club name
+* Selected date range
+* Attendance records
+* Attendance totals
+* Generated timestamp
+
+---
+
+## Export Options
+
+* Browser print
+* Save as PDF
+
+---
+
+# 6. Non-Functional Requirements
+
+# Performance
+
+* Attendance submission under 3 seconds
+* Membership card generation under 2 seconds
+
+---
+
+# Reliability
+
+* Google Sheets synchronization consistency
+
+---
+
+# Security
+
+* Admin authentication required
+* Secure Google API credentials
+* Restricted admin access
+
+---
+
+# Usability
+
+* Mobile-friendly responsive UI
+* Fast attendance workflow
+* Simple interface for members
+
+---
+
+# Availability
+
+* Accessible via desktop and mobile browsers
+
+---
+
+# 7. User Interface Requirements
+
+# 7.1 Attendance Page
+
+## Components
+
+* Club logo/header
+* Student ID input
+* Submit button
+
+---
+
+## Example Interface
+
+```text id="7k0r7x"
+Enter Student ID
+
+[______________]
+
+[Submit]
+```
+
+---
+
+# 7.2 Membership Card Display
+
+## Display Behavior
+
+After successful submission:
+
+* Membership card appears automatically
+
+---
+
+## Card Sections
+
+| Section       | Content        |
+| ------------- | -------------- |
+| Top Center    | Student ID     |
+| Bottom Left   | Member Since   |
+| Bottom Center | Valid Thru     |
+| Bottom Right  | MEMBER         |
+| Lower Banner  | Swimming Level |
+
+---
+
+## Example Membership Level Banner
+
+```text id="x52i1x"
+BEGINNER
+```
+
+---
+
+# 7.3 Admin Dashboard
+
+## Components
+
+* Admin login
+* Attendance table
+* Date filters
+* Search bar
+* Membership status filter
+* Print/export button
+
+---
+
+# 8. Technical Requirements
+
+# Frontend
+
+Recommended:
+
+* React
+* Tailwind CSS
+
+---
+
+# Backend
+
+Recommended:
+
+* Node.js + Express
+
+Alternative:
+
+* Google Apps Script
+
+---
+
+# Database
+
+* Google Sheets API
+
+---
+
+# Authentication
+
+* Firebase Authentication
+  OR
+* Simple admin login system
+
+---
+
+# Hosting Options
+
+* [Vercel](https://vercel.com?utm_source=chatgpt.com)
+* [Netlify](https://www.netlify.com?utm_source=chatgpt.com)
+* [Render](https://render.com?utm_source=chatgpt.com)
+
+---
+
+# 9. System Architecture
+
+```text id="ul8vbo"
+Member Browser
+       ↓
+Frontend Website
+       ↓
+Backend Server / Apps Script
+       ↓
+Google Sheets Database
+```
+
+---
+
+# 10. Backend Logic
+
+# Attendance Submission Process
+
+## Input
+
+```json id="7vc9m0"
+{
+  "studentId": "252UC2546J"
+}
+```
+
+---
+
+## Processing Steps
+
+### Step 1
+
+Search Student ID in Registration Responses Sheet
+
+---
+
+### Step 2
+
+Retrieve:
+
+* Full Name
+* Swimming Level
+* Faculty
+* Start time
+
+---
+
+### Step 3
+
+Calculate:
+
+```text id="aqjqyc"
+Expiry Date = Start time + 1 year
+```
+
+---
+
+### Step 4
+
+Validate membership status
+
+---
+
+### Step 5
+
+Check duplicate attendance for current day
+
+---
+
+### Step 6
+
+Record attendance into Attendance Sheet
+
+---
+
+### Step 7
+
+Generate digital membership card
+
+---
+
+## Response Example
+
+```json id="0p8b31"
+{
+  "studentId": "252UC2546J",
+  "fullName": "Chen Chee Chuen",
+  "swimmingLevel": "Beginner",
+  "membershipStatus": "Active",
+  "attendanceRecorded": true,
+  "showDigitalCard": true
+}
+```
+
+---
+
+# 11. Admin Features Summary
+
+| Feature               | Description                  |
+| --------------------- | ---------------------------- |
+| Admin Login           | Secure admin access          |
+| Attendance Search     | Search by Student ID or name |
+| Date Filtering        | View attendance periods      |
+| Membership Monitoring | Active/expired tracking      |
+| Printable Reports     | Attendance report printing   |
+| Export PDF            | Save reports                 |
+
+---
+
+# 12. Future Enhancements
+
+Possible future improvements:
+
+* QR code attendance
+* Mobile app
+* Email renewal reminders
+* Attendance analytics
+* Member profile pages
+* Training scheduling
+
+---
+
+# 13. Risks & Limitations
+
+| Risk                      | Mitigation                  |
+| ------------------------- | --------------------------- |
+| Google Sheets API limits  | Optimize API calls          |
+| Duplicate attendance      | Daily attendance validation |
+| Internet issues           | Retry/error handling        |
+| Unauthorized admin access | Secure authentication       |
+
+---
+
+# 14. Success Metrics
+
+| Metric                      | Target      |
+| --------------------------- | ----------- |
+| Attendance submission speed | < 3 seconds |
+| Card generation speed       | < 2 seconds |
+| Attendance accuracy         | 95%+        |
+| Manual work reduction       | 80%         |
+| System uptime               | 99%         |
+
+---
+
+# 15. Suggested Tech Stack
+
+| Layer          | Technology           |
+| -------------- | -------------------- |
+| Frontend       | React + Tailwind CSS |
+| Backend        | Node.js + Express    |
+| Database       | Google Sheets API    |
+| Authentication | Firebase Auth        |
+| Hosting        | Vercel / Render      |
+
+---
+
+# 16. Development Milestones
+
+| Phase   | Deliverables                |
+| ------- | --------------------------- |
+| Phase 1 | Attendance page             |
+| Phase 2 | Google Sheets integration   |
+| Phase 3 | Membership expiration logic |
+| Phase 4 | Digital membership card     |
+| Phase 5 | Admin dashboard             |
+| Phase 6 | Reporting/printing          |
+| Phase 7 | Testing & deployment        |
