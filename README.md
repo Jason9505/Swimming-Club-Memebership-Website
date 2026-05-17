@@ -30,18 +30,32 @@ cd client && npm install
 cd ../server && npm install
 ```
 
-### 2. Configure Google Sheets credentials
+### 2. Get your own Google Sheets API credentials
 
-Download your service account JSON key file and place it in the project root folder. Then create a `.env` file in the project root:
+> ⚠️ **Important:** The file `swimming-club-database-*.json` contains Google service account credentials and is listed in `.gitignore` so it **cannot be pushed to GitHub**. You must create your own.
+
+1. Go to the [Google Cloud Console](https://console.cloud.google.com/)
+2. Create a project (or select an existing one)
+3. Enable the **Google Sheets API**
+4. Go to **IAM & Admin → Service Accounts** and create a new service account
+5. Click **Keys → Add Key → Create New Key** and choose **JSON**
+6. A JSON key file will be downloaded — rename it (e.g. `swimming-club-credentials.json`) and place it in the project root folder
+7. Share your Google Sheet with the service account email as **Editor**
+
+### 3. Configure environment variables
+
+Create a `.env` file in the project root:
 
 ```env
 PORT=3001
-GOOGLE_SHEETS_CREDENTIALS_PATH="../swimming-club-database-913570867b98.json"
+GOOGLE_SHEETS_CREDENTIALS_PATH="../your-credentials-file.json"
 ADMIN_USERNAME=admin
 ADMIN_PASSWORD=your-password
 ```
 
-### 3. Configure spreadsheet files
+Make sure `GOOGLE_SHEETS_CREDENTIALS_PATH` points to your downloaded JSON key file.
+
+### 4. Configure spreadsheet files
 
 Open `server/sheets-config.json` and add your spreadsheet IDs:
 
@@ -65,7 +79,7 @@ To add more spreadsheets (e.g., different terms), just add more entries:
 
 Each spreadsheet must be **shared** with your service account email as **Editor**.
 
-### 4. Expected sheet format
+### 5. Expected sheet format
 
 The system auto-detects columns by header name. Supported column names:
 
