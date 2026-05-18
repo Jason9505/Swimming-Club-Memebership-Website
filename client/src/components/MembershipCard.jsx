@@ -38,75 +38,70 @@ export default function MembershipCard({ member }) {
   }
 
   return (
-    <div
-      className={`
-        relative w-full max-w-sm mx-auto rounded-2xl overflow-hidden
-        bg-card-metallic border border-gray-600/50 shadow-2xl
-        transition-all duration-300
-        ${expired ? 'opacity-80' : ''}
-      `}
-    >
-      <div className="card-shine p-6 pb-4">
-        <div className="flex justify-between items-start mb-6">
-          <div className="text-2xl font-bold tracking-wider text-gray-100">
-            {studentId}
+    <div className="flex flex-col gap-1.5 w-full max-w-sm mx-auto">
+      <div className="rounded-2xl overflow-hidden bg-card-metallic border border-gray-600/50 shadow-2xl">
+        <div className="card-shine p-6 pb-4">
+          <div className="flex justify-between items-start mb-6">
+            <div className="text-2xl font-bold tracking-wider text-gray-100">
+              {studentId}
+            </div>
+            <div
+              className={`
+                text-xs font-semibold px-3 py-1 rounded-full uppercase tracking-wider
+                ${expired
+                  ? 'bg-red-900/60 text-red-300 border border-red-700'
+                  : 'bg-emerald-900/60 text-emerald-300 border border-emerald-700'
+                }
+              `}
+            >
+              {membershipStatus || 'Unknown'}
+            </div>
           </div>
-          <div
-            className={`
-              text-xs font-semibold px-3 py-1 rounded-full uppercase tracking-wider
-              ${expired
-                ? 'bg-red-900/60 text-red-300 border border-red-700'
-                : 'bg-emerald-900/60 text-emerald-300 border border-emerald-700'
-              }
-            `}
-          >
-            {membershipStatus || 'Unknown'}
-          </div>
-        </div>
 
-        <div className="mb-6">
-          <div className="text-lg font-medium text-gray-200">{fullName}</div>
-        </div>
+          <div className="mb-6">
+            <div className="text-lg font-medium text-gray-200">{fullName}</div>
+          </div>
 
-        <div className="grid grid-cols-3 gap-3 text-center mb-4">
-          <div>
-            <div className="text-[10px] uppercase tracking-widest text-gray-500 mb-1">
-              Member Since
+          <div className="grid grid-cols-3 gap-3 text-center mb-4">
+            <div>
+              <div className="text-[10px] uppercase tracking-widest text-gray-500 mb-1">
+                Member Since
+              </div>
+              <div className="text-sm font-medium text-gray-300">
+                {formatDate(memberSince)}
+              </div>
             </div>
-            <div className="text-sm font-medium text-gray-300">
-              {formatDate(memberSince)}
+            <div>
+              <div className="text-[10px] uppercase tracking-widest text-gray-500 mb-1">
+                Valid Thru
+              </div>
+              <div className="text-sm font-medium text-gray-300">
+                {formatDate(validThru)}
+              </div>
             </div>
-          </div>
-          <div>
-            <div className="text-[10px] uppercase tracking-widest text-gray-500 mb-1">
-              Valid Thru
-            </div>
-            <div className="text-sm font-medium text-gray-300">
-              {formatDate(validThru)}
-            </div>
-          </div>
-          <div>
-            <div className="text-[10px] uppercase tracking-widest text-gray-500 mb-1">
-              Status
-            </div>
-            <div className="text-sm font-bold tracking-wider text-gray-200">
-              MEMBER
+            <div>
+              <div className="text-[10px] uppercase tracking-widest text-gray-500 mb-1">
+                Status
+              </div>
+              <div className="text-sm font-bold tracking-wider text-gray-200">
+                MEMBER
+              </div>
             </div>
           </div>
         </div>
       </div>
 
-      <div className={`${levelColor} px-6 py-3 text-center`}>
+      <div className={`rounded-2xl overflow-hidden shadow-xl ${levelColor} px-6 py-3 text-center`}>
         <span className="text-white font-bold text-lg tracking-[0.3em] uppercase">
           {swimmingLevel || 'N/A'}
         </span>
       </div>
 
       {expired && (
-        <div className="absolute inset-0 bg-black/40 flex items-center justify-center rounded-2xl">
-          <div className="bg-red-900/80 text-red-200 font-bold text-xl px-6 py-3 rounded-lg border-2 border-red-500 -rotate-12">
+        <div className="rounded-2xl bg-red-900/80 border border-red-700 px-6 py-2 text-center">
+          <span className="text-red-300 font-bold text-sm tracking-wider">
             Membership Expired
-          </div>
+          </span>
         </div>
       )}
     </div>

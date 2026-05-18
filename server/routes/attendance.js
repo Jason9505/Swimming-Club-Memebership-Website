@@ -59,6 +59,11 @@ router.post('/attendance', async (req, res) => {
       return res.status(400).json({ error: 'Student ID is required.' })
     }
 
+    const adminId = process.env.ADMIN_STUDENT_ID
+    if (adminId && studentId.trim() === adminId.trim()) {
+      return res.json({ isAdmin: true })
+    }
+
     const configs = loadSheetsConfig()
     if (configs.length === 0) {
       return res.status(500).json({ error: 'No spreadsheets configured.' })
@@ -78,32 +83,26 @@ router.post('/attendance', async (req, res) => {
 
     const attRows = await getAttendanceRows(primaryId)
     const todayStr = now.toISOString().slice(0, 10)
+    let alreadyRecorded = false
     if (attRows.length > 1) {
       for (let i = 1; i < attRows.length; i++) {
         if (attRows[i][1]?.trim() === studentId.trim() &&
             (attRows[i][0] || '').slice(0, 10) === todayStr) {
-          return res.status(409).json({
-            error: 'Attendance already recorded for today.',
-            studentId: member.studentId,
-            fullName: member.fullName,
-            swimmingLevel: member.level,
-            membershipStatus,
-            memberSince: member.dateJoined,
-            validThru: member.expiryDate,
-            attendanceRecorded: false,
-            showDigitalCard: true,
-          })
+          alreadyRecorded = true
+          break
         }
       }
     }
 
-    await appendAttendance(primaryId, [[
-      now.toISOString(),
-      member.studentId,
-      member.fullName,
-      member.faculty || '',
-      membershipStatus,
-    ]])
+    if (!alreadyRecorded) {
+      await appendAttendance(primaryId, [[
+        now.toISOString(),
+        member.studentId,
+        member.fullName,
+        member.faculty || '',
+        membershipStatus,
+      ]])
+    }
 
     res.json({
       studentId: member.studentId,
@@ -112,7 +111,7 @@ router.post('/attendance', async (req, res) => {
       membershipStatus,
       memberSince: member.dateJoined,
       validThru: member.expiryDate,
-      attendanceRecorded: true,
+      attendanceRecorded: !alreadyRecorded,
       showDigitalCard: true,
     })
   } catch (err) {

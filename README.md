@@ -1,6 +1,6 @@
 # MMU Swimming Club — Attendance Tracking System
 
-A web-based attendance and membership tracking system for the MMU Swimming Club. Members record attendance by entering their Student ID, and the system displays a digital membership card with their swimming level and membership status.
+A web-based attendance and membership tracking system for the MMU Swimming Club. Members enter their Student ID to view their digital membership card with swimming level and membership status. Admins can access a dashboard by entering a configured Admin Student ID.
 
 ## Tech Stack
 
@@ -9,7 +9,7 @@ A web-based attendance and membership tracking system for the MMU Swimming Club.
 | Frontend | React + Vite + Tailwind CSS |
 | Backend | Node.js + Express |
 | Database | Google Sheets API |
-| Auth | Simple admin login |
+| Auth | Admin Student ID check |
 | Hosting | Vercel / Render |
 
 ## Prerequisites
@@ -49,11 +49,12 @@ Create a `.env` file in the project root:
 ```env
 PORT=3001
 GOOGLE_SHEETS_CREDENTIALS_PATH="../your-credentials-file.json"
-ADMIN_USERNAME=admin
-ADMIN_PASSWORD=your-password
+ADMIN_STUDENT_ID=ADMIN001
 ```
 
 Make sure `GOOGLE_SHEETS_CREDENTIALS_PATH` points to your downloaded JSON key file.
+
+`ADMIN_STUDENT_ID` is a special Student ID that, when entered on the attendance page, redirects to the admin dashboard instead of showing a membership card.
 
 ### 4. Configure spreadsheet files
 
@@ -126,16 +127,22 @@ cd server && npm start
 1. Open the website
 2. Enter your **Student ID** and click **Submit**
 3. Your digital membership card is displayed with:
-   - Student ID and membership status (Active / Expired)
+   - Student ID and membership status badge (Active / Expired)
    - Full Name
    - Member Since and Valid Thru dates
    - Swimming Level banner (color-coded: Blue = Beginner, Green = Intermediate, Red = Advanced)
+   - If expired, a red "Membership Expired" bar appears below the card
+
+If you check in multiple times on the same day, the card is shown again without recording a duplicate.
 
 ### Admin Dashboard
 
-- View attendance records
-- Filter by date, Student ID, faculty, membership status
-- Print reports or save as PDF
+Access the admin dashboard by entering the configured Admin Student ID (`ADMIN_STUDENT_ID` in `.env`) on the attendance page. The dashboard includes:
+
+- **Summary cards** — Total attendance, active members, expired members
+- **Filterable attendance table** — Filter by date range, Student ID, Faculty, Membership Status
+- **Enriched data** — Each row includes swimming level alongside attendance info
+- **Print / PDF** — Browser-printable view with hidden UI elements
 
 ## Project Structure
 
@@ -143,13 +150,13 @@ cd server && npm start
 ├── client/                     # React frontend
 │   ├── public/                 # Static assets (logo)
 │   ├── src/
-│   │   ├── pages/              # AttendancePage, MembershipCardPage
+│   │   ├── pages/              # AttendancePage, MembershipCardPage, AdminDashboardPage
 │   │   ├── components/         # MembershipCard
-│   │   └── api/                # API call helpers
+│   │   └── api/                # attendance.js, admin.js
 │   ├── tailwind.config.js      # Dark metallic theme
 │   └── package.json
 ├── server/                     # Express backend
-│   ├── routes/                 # attendance.js, member.js
+│   ├── routes/                 # attendance.js, member.js, admin.js
 │   ├── services/               # googleSheets.js
 │   ├── sheets-config.json      # Spreadsheet list
 │   └── package.json
@@ -160,7 +167,8 @@ cd server && npm start
 ## Key Features
 
 - **Multi-sheet support** — Search across multiple spreadsheets and tabs automatically. Students registered in multiple terms are matched by latest registration date, with missing fields filled from older records.
-- **Duplicate prevention** — Prevents the same Student ID from recording attendance twice on the same day.
+- **Duplicate handling** — If the same Student ID checks in multiple times on the same day, the card is shown without recording a duplicate (no error).
 - **Auto-sheet creation** — The `Attendance` tab is created automatically on first use.
 - **Level color coding** — Beginner (blue), Intermediate (green), Advanced (red).
-- **Expired membership** — Shows a "Membership Expired" overlay when past the expiry date.
+- **Expired membership** — Shows a red "Membership Expired" bar below the card when past the expiry date.
+- **Admin dashboard** — Enter the admin Student ID on the attendance page to access the admin dashboard with summary stats, filtered attendance table, and print support.

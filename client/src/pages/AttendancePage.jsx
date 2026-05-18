@@ -18,7 +18,11 @@ export default function AttendancePage() {
 
     try {
       const data = await submitAttendance(trimmed)
-      navigate('/card', { state: { member: data } })
+      if (data.isAdmin) {
+        navigate('/admin')
+      } else {
+        navigate('/card', { state: { member: data } })
+      }
     } catch (err) {
       setError(err.message)
     } finally {

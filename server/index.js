@@ -3,6 +3,7 @@ import cors from 'cors'
 import dotenv from 'dotenv'
 import attendanceRouter from './routes/attendance.js'
 import memberRouter from './routes/member.js'
+import adminRouter from './routes/admin.js'
 
 dotenv.config({ path: '../.env' })
 
@@ -16,6 +17,7 @@ app.get('/ping', (req, res) => res.json({ ok: true }))
 
 app.use('/api', attendanceRouter)
 app.use('/api', memberRouter)
+app.use('/api', adminRouter)
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`)
