@@ -120,7 +120,7 @@ cd client && npm run build
 cd server && npm start
 ```
 
-## Usage
+## Usag
 
 ### Attendance Check-In
 
