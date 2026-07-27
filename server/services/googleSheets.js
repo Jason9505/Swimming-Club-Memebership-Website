@@ -2,8 +2,10 @@ import { JWT } from 'google-auth-library'
 import { readFileSync, existsSync } from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
+import dotenv from 'dotenv'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
+dotenv.config({ path: path.resolve(__dirname, '..', '..', '.env') })
 const SHEETS_BASE = 'https://sheets.googleapis.com/v4/spreadsheets'
 
 let jwtClient = null
@@ -100,9 +102,27 @@ function findColumnIndex(headers, aliases) {
 
 function parseDate(dateStr) {
   if (!dateStr) return null
-  const parsed = new Date(dateStr)
-  if (!isNaN(parsed)) return parsed
-  const match = dateStr.match(/^(\w+)[- ](\d{2,4})$/)
+  const str = dateStr.toString().trim()
+
+  const ddmmyyyyTime = str.match(/^(\d{1,2})[\/.](\d{1,2})[\/.](\d{4})[,\s]+\d{1,2}:\d{2}/)
+  if (ddmmyyyyTime) {
+    let day = parseInt(ddmmyyyyTime[1])
+    let month = parseInt(ddmmyyyyTime[2])
+    const year = parseInt(ddmmyyyyTime[3])
+    if (month > 12) { const tmp = day; day = month; month = tmp }
+    return new Date(year, month - 1, day)
+  }
+
+  const ddmmyyyy = str.match(/^(\d{1,2})[\/.](\d{1,2})[\/.](\d{4})$/)
+  if (ddmmyyyy) {
+    let day = parseInt(ddmmyyyy[1])
+    let month = parseInt(ddmmyyyy[2])
+    const year = parseInt(ddmmyyyy[3])
+    if (month > 12) { const tmp = day; day = month; month = tmp }
+    return new Date(year, month - 1, day)
+  }
+
+  let match = str.match(/^(\w+)[- ](\d{2,4})$/)
   if (match) {
     const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
     const month = monthNames.indexOf(match[1])
@@ -110,7 +130,8 @@ function parseDate(dateStr) {
     if (year < 100) year += 2000
     if (month !== -1) return new Date(year, month, 1)
   }
-  match = dateStr.match(/^(\d{1,2})\s*(\w+)\s*(\d{2,4})$/)
+
+  match = str.match(/^(\d{1,2})\s*(\w+)\s*(\d{2,4})$/)
   if (match) {
     const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
     const month = monthNames.indexOf(match[2])
@@ -118,7 +139,29 @@ function parseDate(dateStr) {
     if (year < 100) year += 2000
     if (month !== -1) return new Date(year, month, parseInt(match[1]))
   }
+
+  const parsed = new Date(str)
+  if (!isNaN(parsed)) return parsed
+
   return null
+}
+
+function normalizeDate(dateStr) {
+  if (!dateStr) return ''
+  const str = dateStr.toString().trim()
+  if (!str) return ''
+
+  const parsed = parseDate(str)
+  if (parsed) {
+    return parsed.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+  }
+
+  const d = new Date(str)
+  if (!isNaN(d)) {
+    return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+  }
+
+  return str
 }
 
 function extractMemberRow(headers, row) {
@@ -129,8 +172,8 @@ function extractMemberRow(headers, row) {
   return {
     studentId: sidIdx !== -1 ? (row[sidIdx] || '').toString().trim() : '',
     fullName: nameIdx !== -1 ? (row[nameIdx] || '').toString().trim() : '',
-    dateJoined: extractField(headers, row, 'dateJoined'),
-    expiryDate: extractField(headers, row, 'expiryDate'),
+    dateJoined: normalizeDate(extractField(headers, row, 'dateJoined')),
+    expiryDate: normalizeDate(extractField(headers, row, 'expiryDate')),
     level: extractField(headers, row, 'level'),
     gender: extractField(headers, row, 'gender'),
     faculty: extractField(headers, row, 'faculty'),
@@ -142,54 +185,72 @@ function extractField(headers, row, field) {
   return idx !== -1 ? (row[idx] || '').toString().trim() : ''
 }
 
+async function apiWithRetry(sheetId, method, endpoint, body, retries = 2) {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      return await api(sheetId, method, endpoint, body)
+    } catch (e) {
+      const isRateLimit = e.message.includes('429') || e.message.includes('RESOURCE_EXHAUSTED')
+      if (isRateLimit && attempt < retries) {
+        const delay = 1000 * Math.pow(2, attempt) + Math.random() * 500
+        await new Promise(r => setTimeout(r, delay))
+        continue
+      }
+      throw e
+    }
+  }
+}
+
 async function readTabData(sheetId, tabName) {
   const results = []
-  let lastError = null
 
-  for (const startRow of [1, 4]) {
-    try {
-      const range = `'${tabName}'!A${startRow}:Z1000`
-      const data = await api(sheetId, 'GET', `values/${encodeURIComponent(range)}`)
-      const rows = data.values
-      if (!rows || rows.length < 2) continue
+  try {
+    const range = `'${tabName}'!A1:Z1000`
+    const data = await apiWithRetry(sheetId, 'GET', `values/${encodeURIComponent(range)}`)
+    const rows = data.values
+    if (!rows || rows.length < 2) return results
 
-      const headers = rows[0]
-      const sidIdx = findColumnIndex(headers, COLUMN_ALIASES.studentId)
-      const nameIdx = findColumnIndex(headers, COLUMN_ALIASES.fullName)
+    let headerRowIdx = -1
+    let headers = null
+    const maxHeaderScan = Math.min(10, rows.length)
 
-      if (sidIdx === -1 && nameIdx === -1) continue
-
-      for (let i = 1; i < rows.length; i++) {
-        const r = rows[i]
-        const member = extractMemberRow(headers, r)
-        if (member && (member.studentId || member.fullName)) {
-          results.push(member)
-        }
+    for (let h = 0; h < maxHeaderScan; h++) {
+      const candidate = rows[h]
+      const sidIdx = findColumnIndex(candidate, COLUMN_ALIASES.studentId)
+      const nameIdx = findColumnIndex(candidate, COLUMN_ALIASES.fullName)
+      if (sidIdx !== -1 || nameIdx !== -1) {
+        headerRowIdx = h
+        headers = candidate
+        break
       }
-
-      if (results.length > 0) break
-    } catch (e) {
-      lastError = e
     }
+
+    if (headerRowIdx === -1) return results
+
+    for (let i = headerRowIdx + 1; i < rows.length; i++) {
+      const r = rows[i]
+      const member = extractMemberRow(headers, r)
+      if (member && (member.studentId || member.fullName)) {
+        results.push(member)
+      }
+    }
+  } catch {
+    // failed tab returns empty
   }
 
   return results
 }
 
 export async function getMemberRows(sheetId) {
-  const info = await api(sheetId, 'GET', '')
+  const info = await apiWithRetry(sheetId, 'GET', '')
   const tabs = info.sheets || []
   const allMembers = []
 
   for (const tab of tabs) {
     const name = tab.properties.title
     if (name === 'Attendance') continue
-    try {
-      const members = await readTabData(sheetId, name)
-      allMembers.push(...members)
-    } catch {
-      // skip tabs that fail
-    }
+    const members = await readTabData(sheetId, name)
+    allMembers.push(...members)
   }
 
   return allMembers

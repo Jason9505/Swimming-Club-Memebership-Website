@@ -1,143 +1,90 @@
 import { Router } from 'express'
+import rateLimit from 'express-rate-limit'
 import {
-  loadSheetsConfig,
-  getMemberRows,
   getAttendanceRows,
-  parseDate,
-} from '../services/googleSheets.js'
+  getAttendanceSummary,
+  getAllMembersMap,
+} from '../database.js'
+import { parseDate } from '../services/googleSheets.js'
 
 const router = Router()
 
-async function searchMemberAcrossSheets(studentId) {
-  const configs = loadSheetsConfig()
-  const allMatches = []
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  message: { error: 'Too many login attempts. Try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+})
 
-  const results = await Promise.allSettled(
-    configs.map(cfg => getMemberRows(cfg.id))
-  )
+function requireAdmin(req, res, next) {
+  if (req.session?.isAdmin) return next()
+  res.status(401).json({ error: 'Unauthorized' })
+}
 
-  for (const result of results) {
-    if (result.status !== 'fulfilled') continue
-    for (const member of result.value) {
-      if (member.studentId === studentId.trim()) {
-        allMatches.push({ ...member })
-      }
-    }
+router.post('/admin/login', loginLimiter, (req, res) => {
+  const { password } = req.body || {}
+  if (!password) {
+    return res.status(400).json({ error: 'Password required' })
   }
 
-  if (allMatches.length === 0) return null
+  const adminPassword = process.env.ADMIN_PASSWORD
+  if (!adminPassword) {
+    return res.status(500).json({ error: 'Admin password not configured' })
+  }
 
-  allMatches.sort((a, b) => {
-    const da = parseDate(a.dateJoined)
-    const db = parseDate(b.dateJoined)
-    if (!da && !db) return 0
-    if (!da) return 1
-    if (!db) return -1
-    return db.getTime() - da.getTime()
+  if (password !== adminPassword) {
+    return res.status(401).json({ error: 'Invalid password' })
+  }
+
+  req.session.isAdmin = true
+  res.json({ ok: true })
+})
+
+router.post('/admin/logout', (req, res) => {
+  req.session.destroy(() => {
+    res.clearCookie('connect.sid')
+    res.json({ ok: true })
   })
+})
 
-  const best = { ...allMatches[0] }
-
-  for (const match of allMatches) {
-    if (!best.dateJoined && match.dateJoined) best.dateJoined = match.dateJoined
-    if (!best.expiryDate && match.expiryDate) best.expiryDate = match.expiryDate
-    if (!best.level && match.level) best.level = match.level
-    if (!best.gender && match.gender) best.gender = match.gender
-    if (!best.faculty && match.faculty) best.faculty = match.faculty
-    if (!best.fullName && match.fullName) best.fullName = match.fullName
+router.get('/admin/me', (req, res) => {
+  if (req.session?.isAdmin) {
+    return res.json({ isAdmin: true })
   }
+  res.status(401).json({ error: 'Unauthorized' })
+})
 
-  return best
-}
-
-async function getAllMembersMap() {
-  const configs = loadSheetsConfig()
-  const map = {}
-
-  const results = await Promise.allSettled(
-    configs.map(cfg => getMemberRows(cfg.id))
-  )
-
-  for (const result of results) {
-    if (result.status !== 'fulfilled') continue
-    for (const member of result.value) {
-      const sid = member.studentId
-      if (!sid) continue
-      if (!map[sid]) {
-        map[sid] = { ...member }
-      } else {
-        const existing = map[sid]
-        if (!existing.dateJoined && member.dateJoined) existing.dateJoined = member.dateJoined
-        if (!existing.expiryDate && member.expiryDate) existing.expiryDate = member.expiryDate
-        if (!existing.level && member.level) existing.level = member.level
-        if (!existing.gender && member.gender) existing.gender = member.gender
-        if (!existing.faculty && member.faculty) existing.faculty = member.faculty
-        if (!existing.fullName && member.fullName) existing.fullName = member.fullName
-      }
-    }
-  }
-
-  return map
-}
-
-router.get('/admin/attendance', async (req, res) => {
+router.get('/admin/attendance', requireAdmin, async (req, res) => {
   try {
-    const configs = loadSheetsConfig()
-    if (configs.length === 0) {
-      return res.status(500).json({ error: 'No spreadsheets configured.' })
-    }
-
-    const primaryId = configs[0].id
-    const attRows = await getAttendanceRows(primaryId)
-
-    if (attRows.length < 2) {
-      return res.json({ records: [], total: 0 })
-    }
-
-    const membersMap = await getAllMembersMap()
-    const now = new Date()
     const { startDate, endDate, studentId, faculty, membershipStatus } = req.query
 
-    const records = []
-    for (let i = 1; i < attRows.length; i++) {
-      const row = attRows[i]
-      const timestamp = row[0] || ''
-      const sid = (row[1] || '').trim()
-      const name = row[2] || ''
-      const fac = row[3] || ''
-      const status = row[4] || ''
+    const filters = {}
+    if (startDate) filters.startDate = startDate
+    if (endDate) filters.endDate = endDate
+    if (studentId) filters.studentId = studentId
+    if (faculty) filters.faculty = faculty
+    if (membershipStatus) filters.membershipStatus = membershipStatus
 
-      if (studentId && !sid.toLowerCase().includes(studentId.toLowerCase())) continue
-      if (faculty && !fac.toLowerCase().includes(faculty.toLowerCase())) continue
-      if (membershipStatus && status !== membershipStatus) continue
+    const attRows = getAttendanceRows(filters)
+    const membersMap = getAllMembersMap()
+    const now = new Date()
 
-      if (startDate || endDate) {
-        const dt = parseDate(timestamp)
-        if (dt) {
-          if (startDate && dt < new Date(startDate)) continue
-          if (endDate) {
-            const end = new Date(endDate)
-            end.setHours(23, 59, 59, 999)
-            if (dt > end) continue
-          }
-        }
-      }
-
+    const records = attRows.map((row) => {
+      const sid = (row.student_id || '').trim()
       const member = membersMap[sid]
       const expiry = member ? parseDate(member.expiryDate) : null
-      const computedStatus = expiry && now > expiry ? 'Expired' : (status || 'Active')
+      const computedStatus = expiry && now > expiry ? 'Expired' : (row.membership_status || 'Active')
 
-      records.push({
-        timestamp,
+      return {
+        timestamp: row.timestamp,
         studentId: sid,
-        fullName: name,
-        faculty: fac,
+        fullName: row.fullName || '',
+        faculty: row.faculty || '',
         swimmingLevel: member?.level || '',
         membershipStatus: computedStatus,
-      })
-    }
-
-    records.sort((a, b) => b.timestamp.localeCompare(a.timestamp))
+      }
+    })
 
     res.json({ records, total: records.length })
   } catch (err) {
@@ -146,39 +93,10 @@ router.get('/admin/attendance', async (req, res) => {
   }
 })
 
-router.get('/admin/summary', async (req, res) => {
+router.get('/admin/summary', requireAdmin, async (req, res) => {
   try {
-    const configs = loadSheetsConfig()
-    if (configs.length === 0) {
-      return res.status(500).json({ error: 'No spreadsheets configured.' })
-    }
-
-    const primaryId = configs[0].id
-    const attRows = await getAttendanceRows(primaryId)
-    const totalAttendance = attRows.length > 1 ? attRows.length - 1 : 0
-
-    const membersMap = await getAllMembersMap()
-    const now = new Date()
-    const activeSet = new Set()
-    const expiredSet = new Set()
-
-    for (let i = 1; i < attRows.length; i++) {
-      const sid = (attRows[i][1] || '').trim()
-      if (!sid) continue
-      const member = membersMap[sid]
-      const expiry = member ? parseDate(member.expiryDate) : null
-      if (expiry && now > expiry) {
-        expiredSet.add(sid)
-      } else {
-        activeSet.add(sid)
-      }
-    }
-
-    res.json({
-      totalAttendance,
-      activeMembers: activeSet.size,
-      expiredMembers: expiredSet.size,
-    })
+    const summary = getAttendanceSummary()
+    res.json(summary)
   } catch (err) {
     console.error('Admin summary error:', err)
     res.status(500).json({ error: 'Server error.' })

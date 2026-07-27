@@ -26,13 +26,10 @@ export default function MembershipCard({ member }) {
 
   function formatDate(dateStr) {
     if (!dateStr) return '—'
+    if (/^\d{2} \w{3} \d{4}$/.test(dateStr)) return dateStr
     const d = new Date(dateStr)
     if (!isNaN(d)) {
-      return d.toLocaleDateString('en-GB', {
-        day: '2-digit',
-        month: 'short',
-        year: 'numeric',
-      })
+      return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
     }
     return dateStr
   }

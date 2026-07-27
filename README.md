@@ -8,7 +8,7 @@ A web-based attendance and membership tracking system for the MMU Swimming Club.
 |---|---|
 | Frontend | React + Vite + Tailwind CSS |
 | Backend | Node.js + Express |
-| Database | Google Sheets API |
+| Database | SQLite (synced from Google Sheets) |
 | Auth | Admin Student ID check |
 | Hosting | Vercel / Render |
 
@@ -17,6 +17,20 @@ A web-based attendance and membership tracking system for the MMU Swimming Club.
 - [Node.js](https://nodejs.org/) v18 or higher
 - A Google Cloud service account with the Google Sheets API enabled
 - A Google Sheet with member data shared with the service account
+
+## How It Works
+
+On server startup, member data is **synced from Google Sheets into a local SQLite database**. All attendance check-ins, member lookups, and admin queries are served from SQLite — instant and zero rate-limit issues. The sync re-runs automatically every 30 minutes to pick up new registrations.
+
+```
+Google Forms → Google Sheets (member registration)
+                    ↓ sync (startup + every 30 min)
+                  SQLite (primary data store)
+                    ↓
+         Express API (instant local reads)
+                    ↓
+              React frontend
+```
 
 ## Setup
 
@@ -29,6 +43,8 @@ cd client && npm install
 # Install backend dependencies
 cd ../server && npm install
 ```
+
+> **Note:** If you're switching between Windows CMD and WSL, delete `node_modules` and reinstall in the terminal you'll use. Native modules (`better-sqlite3`, `rolldown`) compile platform-specific binaries.
 
 ### 2. Get your own Google Sheets API credentials
 
@@ -94,18 +110,34 @@ The system auto-detects columns by header name. Supported column names:
 
 The system scans all tabs in each spreadsheet (except tabs named `Attendance`) and detects headers from **row 1** or **row 4**.
 
-An `Attendance` tab is auto-created in the first spreadsheet on the first submission.
-
 ## Running
 
-### Development (two terminals)
+### Step 1 — Start the Backend (Terminal 1)
 
 ```bash
-# Terminal 1 — Backend
-cd server && npm run dev
+cd server
+npm run dev
+```
 
-# Terminal 2 — Frontend
-cd client && npm run dev
+On startup you'll see:
+
+```
+[DB] SQLite database initialized
+[Sync] Starting Google Sheets → SQLite sync...
+[Sync] Term 24/25: 326 members synced
+[Sync] Term 25/26: 61 members synced
+[Sync] Term 23/25: 228 members synced
+[Sync] Complete in 4.1s — 435 unique members in DB (3 sheets OK, 0 failed)
+Server running on port 3001
+```
+
+The server is **not ready** until you see `Server running on port 3001`. The initial sync takes ~5 seconds. After that, re-syncs happen silently every 30 minutes in the background.
+
+### Step 2 — Start the Frontend (Terminal 2)
+
+```bash
+cd client
+npm run dev
 ```
 
 The frontend runs at `http://localhost:5173` and proxies API requests to the backend at `http://localhost:3001`.
@@ -129,7 +161,7 @@ cd server && npm start
 3. Your digital membership card is displayed with:
    - Student ID and membership status badge (Active / Expired)
    - Full Name
-   - Member Since and Valid Thru dates
+   - Member Since and Valid Thru dates (formatted as "DD MMM YYYY")
    - Swimming Level banner (color-coded: Blue = Beginner, Green = Intermediate, Red = Advanced)
    - If expired, a red "Membership Expired" bar appears below the card
 
@@ -156,8 +188,11 @@ Access the admin dashboard by entering the configured Admin Student ID (`ADMIN_S
 │   ├── tailwind.config.js      # Dark metallic theme
 │   └── package.json
 ├── server/                     # Express backend
+│   ├── database.js             # SQLite schema, queries, member/attendance functions
+│   ├── sync.js                 # Google Sheets → SQLite sync orchestrator
+│   ├── index.js                # Server entry point (init DB, sync, schedule)
 │   ├── routes/                 # attendance.js, member.js, admin.js
-│   ├── services/               # googleSheets.js
+│   ├── services/               # googleSheets.js (Sheets API + date parsing)
 │   ├── sheets-config.json      # Spreadsheet list
 │   └── package.json
 ├── .env                        # Credentials and config
@@ -166,9 +201,11 @@ Access the admin dashboard by entering the configured Admin Student ID (`ADMIN_S
 
 ## Key Features
 
-- **Multi-sheet support** — Search across multiple spreadsheets and tabs automatically. Students registered in multiple terms are matched by latest registration date, with missing fields filled from older records.
-- **Duplicate handling** — If the same Student ID checks in multiple times on the same day, the card is shown without recording a duplicate (no error).
-- **Auto-sheet creation** — The `Attendance` tab is created automatically on first use.
+- **SQLite primary store** — All reads are instant local queries. No Google Sheets API rate limits.
+- **Auto-sync** — Member data syncs from Google Sheets on startup and every 30 minutes.
+- **Multi-sheet support** — Searches across multiple spreadsheets and tabs. Students in multiple terms are matched by latest registration, with missing fields filled from older records.
+- **Duplicate handling** — Same Student ID cannot check in twice on the same day.
+- **Date normalization** — All dates normalized to "DD MMM YYYY" format on the server, fixing locale parsing issues.
 - **Level color coding** — Beginner (blue), Intermediate (green), Advanced (red).
 - **Expired membership** — Shows a red "Membership Expired" bar below the card when past the expiry date.
-- **Admin dashboard** — Enter the admin Student ID on the attendance page to access the admin dashboard with summary stats, filtered attendance table, and print support.
+- **Admin dashboard** — Enter the admin Student ID on the attendance page to access summary stats, filtered attendance table, and print support.

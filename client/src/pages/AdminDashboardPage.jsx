@@ -1,9 +1,15 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { getAttendance, getSummary } from '../api/admin'
+import { login, logout, checkAuth, getAttendance, getSummary } from '../api/admin'
 
 export default function AdminDashboardPage() {
   const navigate = useNavigate()
+  const [authenticated, setAuthenticated] = useState(false)
+  const [checking, setChecking] = useState(true)
+  const [password, setPassword] = useState('')
+  const [loginError, setLoginError] = useState('')
+  const [loginLoading, setLoginLoading] = useState(false)
+
   const [records, setRecords] = useState([])
   const [summary, setSummary] = useState({ totalAttendance: 0, activeMembers: 0, expiredMembers: 0 })
   const [loading, setLoading] = useState(true)
@@ -16,6 +22,15 @@ export default function AdminDashboardPage() {
     faculty: '',
     membershipStatus: '',
   })
+
+  useEffect(() => {
+    checkAuth().then((ok) => {
+      setAuthenticated(ok)
+      setChecking(false)
+    }).catch(() => {
+      setChecking(false)
+    })
+  }, [])
 
   const fetchData = useCallback(async (currentFilters) => {
     setLoading(true)
@@ -35,8 +50,32 @@ export default function AdminDashboardPage() {
   }, [])
 
   useEffect(() => {
-    fetchData(filters)
-  }, [])
+    if (authenticated) {
+      fetchData(filters)
+    }
+  }, [authenticated])
+
+  async function handleLogin(e) {
+    e.preventDefault()
+    setLoginLoading(true)
+    setLoginError('')
+    try {
+      await login(password)
+      setAuthenticated(true)
+    } catch (err) {
+      setLoginError(err.message)
+    } finally {
+      setLoginLoading(false)
+    }
+  }
+
+  async function handleLogout() {
+    await logout()
+    setAuthenticated(false)
+    setPassword('')
+    setRecords([])
+    setSummary({ totalAttendance: 0, activeMembers: 0, expiredMembers: 0 })
+  }
 
   function handleFilterChange(key, value) {
     setFilters(prev => ({ ...prev, [key]: value }))
@@ -54,7 +93,7 @@ export default function AdminDashboardPage() {
   }
 
   function formatTimestamp(ts) {
-    if (!ts) return '—'
+    if (!ts) return '\u2014'
     const d = new Date(ts)
     if (!isNaN(d)) {
       return d.toLocaleString('en-GB', {
@@ -98,6 +137,64 @@ export default function AdminDashboardPage() {
     )
   }
 
+  if (checking) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <svg className="animate-spin h-8 w-8 text-gray-400" viewBox="0 0 24 24">
+          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+        </svg>
+      </div>
+    )
+  }
+
+  if (!authenticated) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center px-4 py-12">
+        <div className="w-full max-w-sm mx-auto text-center">
+          <img
+            src="/MMUSwimmingClubLogo(white).png"
+            alt="MMU Swimming Club"
+            className="h-20 mx-auto mb-6 object-contain"
+          />
+          <h1 className="text-xl font-light text-gray-300 mb-1">Admin Login</h1>
+          <p className="text-xs text-gray-500 mb-6">Enter the admin password to continue</p>
+
+          <form onSubmit={handleLogin} className="space-y-4">
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Password"
+              autoFocus
+              className="w-full px-4 py-3 rounded-xl text-center text-sm tracking-wider bg-metallic-800 border border-gray-600/50 text-gray-100 placeholder-gray-600 outline-none transition-all duration-200 focus:border-gray-400 focus:ring-1 focus:ring-gray-400"
+            />
+            <button
+              type="submit"
+              disabled={loginLoading || !password}
+              className="w-full py-3 rounded-xl font-semibold tracking-wider text-sm bg-gradient-to-r from-gray-600 to-gray-500 text-gray-100 border border-gray-500/50 shadow-lg transition-all duration-200 hover:from-gray-500 hover:to-gray-400 active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {loginLoading ? 'Logging in...' : 'Login'}
+            </button>
+          </form>
+
+          {loginError && (
+            <div className="mt-4 p-3 rounded-xl bg-red-900/30 border border-red-800/50">
+              <p className="text-red-300 text-sm">{loginError}</p>
+            </div>
+          )}
+
+          <button
+            onClick={() => navigate('/')}
+            className="mt-6 text-xs text-gray-600 hover:text-gray-400 transition-colors"
+          >
+            Back to Attendance
+          </button>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen px-4 py-8 print:py-4">
       <div className="max-w-7xl mx-auto">
@@ -121,6 +218,12 @@ export default function AdminDashboardPage() {
               className="px-4 py-2 rounded-lg bg-metallic-700 border border-gray-600/50 text-gray-300 text-sm font-medium hover:bg-metallic-600 transition-all print:hidden"
             >
               Print / PDF
+            </button>
+            <button
+              onClick={handleLogout}
+              className="px-4 py-2 rounded-lg bg-red-900/40 border border-red-800/50 text-red-300 text-sm font-medium hover:bg-red-900/60 transition-all print:hidden"
+            >
+              Logout
             </button>
             <button
               onClick={() => navigate('/')}
@@ -263,7 +366,7 @@ export default function AdminDashboardPage() {
                         {rec.studentId}
                       </td>
                       <td className="py-3 px-4 text-gray-200 print:text-gray-800">{rec.fullName}</td>
-                      <td className="py-3 px-4 text-gray-300 print:text-gray-700">{rec.faculty || '—'}</td>
+                      <td className="py-3 px-4 text-gray-300 print:text-gray-700">{rec.faculty || '\u2014'}</td>
                       <td className="py-3 px-4">{levelBadge(rec.swimmingLevel)}</td>
                       <td className="py-3 px-4">{statusBadge(rec.membershipStatus)}</td>
                     </tr>
