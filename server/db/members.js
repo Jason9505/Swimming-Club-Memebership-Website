@@ -1,15 +1,22 @@
 import Database from 'better-sqlite3'
 import path from 'path'
 import { fileURLToPath } from 'url'
-import os from 'os'
+import { parseDate } from '../services/googleSheets.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const isWSL = os.type() === 'Linux' && os.release().includes('microsoft')
-const DB_PATH = isWSL
-  ? path.join(os.homedir(), '.swimming-club-members.db')
-  : path.resolve(__dirname, '..', 'members.db')
+const DB_PATH = path.resolve(__dirname, '..', 'members.db')
 
 let db = null
+
+function computeExpiryIfMissing(member) {
+  if (member.expiryDate || !member.dateJoined) return member
+  const joined = parseDate(member.dateJoined)
+  if (!joined) return member
+  const expiry = new Date(joined)
+  expiry.setFullYear(expiry.getFullYear() + 1)
+  member.expiryDate = expiry.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+  return member
+}
 
 export function initMembersDb() {
   if (db) return db
@@ -97,7 +104,7 @@ export function findMember(studentId) {
     if (!best.full_name && row.full_name) best.full_name = row.full_name
   }
 
-  return {
+  return computeExpiryIfMissing({
     studentId: best.student_id,
     fullName: best.full_name,
     dateJoined: best.date_joined,
@@ -105,7 +112,7 @@ export function findMember(studentId) {
     level: best.level,
     gender: best.gender,
     faculty: best.faculty,
-  }
+  })
 }
 
 export function getAllMembersMap() {
@@ -135,6 +142,10 @@ export function getAllMembersMap() {
       if (!existing.faculty && row.faculty) existing.faculty = row.faculty
       if (!existing.fullName && row.full_name) existing.fullName = row.full_name
     }
+  }
+
+  for (const sid of Object.keys(map)) {
+    computeExpiryIfMissing(map[sid])
   }
 
   return map

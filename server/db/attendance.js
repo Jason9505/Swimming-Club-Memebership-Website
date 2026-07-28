@@ -1,14 +1,10 @@
 import Database from 'better-sqlite3'
 import path from 'path'
 import { fileURLToPath } from 'url'
-import os from 'os'
 import { getMembersDb } from './members.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const isWSL = os.type() === 'Linux' && os.release().includes('microsoft')
-const DB_PATH = isWSL
-  ? path.join(os.homedir(), '.swimming-club-attendance.db')
-  : path.resolve(__dirname, '..', 'attendance.db')
+const DB_PATH = path.resolve(__dirname, '..', 'attendance.db')
 
 let db = null
 

@@ -56,7 +56,9 @@ export default function MembershipCard({ member }) {
           </div>
 
           <div className="mb-6">
-            <div className="text-lg font-medium text-gray-200">{fullName}</div>
+            <div className={`text-lg font-medium ${fullName ? 'text-gray-200' : 'text-gray-500 italic'}`}>
+              {fullName || 'Name not available'}
+            </div>
           </div>
 
           <div className="grid grid-cols-3 gap-3 text-center mb-4">

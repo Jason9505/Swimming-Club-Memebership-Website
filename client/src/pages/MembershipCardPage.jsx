@@ -74,6 +74,14 @@ export default function MembershipCardPage() {
 
         <MembershipCard member={member} />
 
+        {!member.fullName && (
+          <div className="mt-4 rounded-xl bg-yellow-900/50 border border-yellow-600/50 px-4 py-3 text-center">
+            <p className="text-yellow-300 text-sm font-medium">
+              Name not found in records. Please inform our committee.
+            </p>
+          </div>
+        )}
+
         <div className="mt-8 text-center">
           <p className="text-green-400/80 text-sm font-medium mb-6">
             ✓ Attendance recorded successfully

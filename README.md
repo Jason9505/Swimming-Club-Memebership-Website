@@ -1,6 +1,6 @@
 # MMU Swimming Club — Attendance Tracking System
 
-A web-based attendance and membership tracking system for the MMU Swimming Club. Members enter their Student ID to view their digital membership card with swimming level and membership status. Admins can access a dashboard by entering a configured Admin Student ID.
+A web-based attendance and membership tracking system for the MMU Swimming Club. Members enter their Student ID to view their digital membership card with swimming level and membership status. Admins can access a password-protected dashboard at `/admin`.
 
 ## Tech Stack
 
@@ -9,7 +9,7 @@ A web-based attendance and membership tracking system for the MMU Swimming Club.
 | Frontend | React + Vite + Tailwind CSS |
 | Backend | Node.js + Express |
 | Database | SQLite (synced from Google Sheets) |
-| Auth | Admin Student ID check |
+| Auth | Password-based session auth (admin) |
 | Hosting | Vercel / Render |
 
 ## Prerequisites
@@ -65,12 +65,15 @@ Create a `.env` file in the project root:
 ```env
 PORT=3001
 GOOGLE_SHEETS_CREDENTIALS_PATH="../your-credentials-file.json"
-ADMIN_STUDENT_ID=ADMIN001
+ADMIN_PASSWORD=your-secure-password
+SESSION_SECRET=your-session-secret
+ALLOWED_ORIGIN=http://localhost:5173
 ```
 
-Make sure `GOOGLE_SHEETS_CREDENTIALS_PATH` points to your downloaded JSON key file.
-
-`ADMIN_STUDENT_ID` is a special Student ID that, when entered on the attendance page, redirects to the admin dashboard instead of showing a membership card.
+- `GOOGLE_SHEETS_CREDENTIALS_PATH` — points to your downloaded JSON key file
+- `ADMIN_PASSWORD` — password used to log in to the admin dashboard
+- `SESSION_SECRET` — secret for signing session cookies (use a random string)
+- `ALLOWED_ORIGIN` — the frontend URL allowed by CORS (default: `http://localhost:5173`)
 
 ### 4. Configure spreadsheet files
 
@@ -108,7 +111,7 @@ The system auto-detects columns by header name. Supported column names:
 | Date Joined | `date_joined`, `Start time`, `Timestamp` |
 | Expiry Date | `expiry_date`, `Expiry Date` |
 
-The system scans all tabs in each spreadsheet (except tabs named `Attendance`) and detects headers from **row 1** or **row 4**.
+The system scans all tabs in each spreadsheet (except tabs named `Attendance`) and detects headers from any of the first 10 rows.
 
 ## Running
 
@@ -169,7 +172,7 @@ If you check in multiple times on the same day, the card is shown again without 
 
 ### Admin Dashboard
 
-Access the admin dashboard by entering the configured Admin Student ID (`ADMIN_STUDENT_ID` in `.env`) on the attendance page. The dashboard includes:
+Navigate to `/admin` and log in with the configured admin password (`ADMIN_PASSWORD` in `.env`). The dashboard includes:
 
 - **Summary cards** — Total attendance, active members, expired members
 - **Filterable attendance table** — Filter by date range, Student ID, Faculty, Membership Status
@@ -188,12 +191,17 @@ Access the admin dashboard by entering the configured Admin Student ID (`ADMIN_S
 │   ├── tailwind.config.js      # Dark metallic theme
 │   └── package.json
 ├── server/                     # Express backend
-│   ├── database.js             # SQLite schema, queries, member/attendance functions
-│   ├── sync.js                 # Google Sheets → SQLite sync orchestrator
-│   ├── index.js                # Server entry point (init DB, sync, schedule)
+│   ├── db/
+│   │   ├── members.js          # Members table: init, upsert, find, getAllMap
+│   │   └── attendance.js       # Attendance table: init, insert, query, summary
 │   ├── routes/                 # attendance.js, member.js, admin.js
 │   ├── services/               # googleSheets.js (Sheets API + date parsing)
+│   ├── database.js             # Re-exports from db/ modules
+│   ├── sync.js                 # Google Sheets → SQLite sync orchestrator
+│   ├── index.js                # Server entry point (init DB, sync, schedule)
 │   ├── sheets-config.json      # Spreadsheet list
+│   ├── members.db              # SQLite members database (auto-created)
+│   ├── attendance.db           # SQLite attendance database (auto-created)
 │   └── package.json
 ├── .env                        # Credentials and config
 └── PRD.txt                     # Product requirements
@@ -206,6 +214,12 @@ Access the admin dashboard by entering the configured Admin Student ID (`ADMIN_S
 - **Multi-sheet support** — Searches across multiple spreadsheets and tabs. Students in multiple terms are matched by latest registration, with missing fields filled from older records.
 - **Duplicate handling** — Same Student ID cannot check in twice on the same day.
 - **Date normalization** — All dates normalized to "DD MMM YYYY" format on the server, fixing locale parsing issues.
+- **Auto-calculated expiry** — When a member's expiry date is missing from the sheet, it is automatically computed as `date_joined + 1 year`.
+- **Empty name warning** — If a member's name is missing from the records, the card shows "Name not available" with a prompt to contact the admin.
 - **Level color coding** — Beginner (blue), Intermediate (green), Advanced (red).
 - **Expired membership** — Shows a red "Membership Expired" bar below the card when past the expiry date.
-- **Admin dashboard** — Enter the admin Student ID on the attendance page to access summary stats, filtered attendance table, and print support.
+- **Admin dashboard** — Password-protected dashboard with summary stats, filterable attendance table, and print support. Rate-limited to 5 login attempts per 15 minutes.
+
+things to improve later:
+- differentiate attendance and checking the membership validation
+- add committee into the system
