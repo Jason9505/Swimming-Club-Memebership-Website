@@ -1,12 +1,18 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { submitAttendance } from '../api/attendance'
+import { submitAttendance, getSessionInfo } from '../api/attendance'
+import SessionBars from '../components/SessionBars'
 
 export default function AttendancePage() {
   const [studentId, setStudentId] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [session, setSession] = useState(null)
   const navigate = useNavigate()
+
+  useEffect(() => {
+    getSessionInfo().then(setSession).catch(() => {})
+  }, [])
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -41,6 +47,8 @@ export default function AttendancePage() {
         <p className="text-sm text-gray-500 mb-8">
           Record your attendance for today
         </p>
+
+        <SessionBars session={session} />
 
         <form onSubmit={handleSubmit} className="space-y-5">
           <input

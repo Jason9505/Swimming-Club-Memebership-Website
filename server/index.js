@@ -8,7 +8,7 @@ import cookieParser from 'cookie-parser'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import dotenv from 'dotenv'
-import { initMembersDb, initAttendanceDb } from './database.js'
+import { initMembersDb, initAttendanceDb, initCommitteeDb } from './database.js'
 import { syncFromSheets } from './sync.js'
 import attendanceRouter from './routes/attendance.js'
 import memberRouter from './routes/member.js'
@@ -65,7 +65,8 @@ app.get('*', (req, res) => {
 
 initMembersDb()
 initAttendanceDb()
-console.log('[DB] SQLite databases initialized (members + attendance)')
+initCommitteeDb()
+console.log('[DB] SQLite databases initialized (members + attendance + committee)')
 
 async function startServer() {
   try {

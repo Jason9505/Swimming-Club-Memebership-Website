@@ -16,3 +16,13 @@ export {
   getAttendanceRows,
   getAttendanceSummary,
 } from './db/attendance.js'
+
+export {
+  initCommitteeDb,
+  getCommitteeDb,
+  upsertCommittee,
+  findCommitteeMember,
+  getAllCommitteeMap,
+  clearAllCommittee,
+  getCommitteeCount,
+} from './db/committee.js'

@@ -14,6 +14,8 @@ export default {
         beginner: '#3B82F6',
         intermediate: '#22C55E',
         advanced: '#EF4444',
+        gold: '#D4AF37',
+        goldLight: '#E8C76B',
       },
       backgroundImage: {
         'metallic-gradient':

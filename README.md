@@ -1,6 +1,6 @@
 # MMU Swimming Club — Attendance Tracking System
 
-A web-based attendance and membership tracking system for the MMU Swimming Club. Members enter their Student ID to view their digital membership card with swimming level and membership status. Admins can access a password-protected dashboard at `/admin`.
+A web-based attendance and membership tracking system for the MMU Swimming Club. Members enter their Student ID to view their digital membership card with swimming level and membership status. Committee members are recognized first and get a gold card showing their position and status. Attendance is only recorded during the club's sessions (Tue & Wed, 7:50 PM – 10:00 PM); membership checks work anytime. Admins can access a password-protected dashboard at `/admin`.
 
 ## Tech Stack
 
@@ -20,7 +20,7 @@ A web-based attendance and membership tracking system for the MMU Swimming Club.
 
 ## How It Works
 
-On server startup, member data is **synced from Google Sheets into a local SQLite database**. All attendance check-ins, member lookups, and admin queries are served from SQLite — instant and zero rate-limit issues. The sync re-runs automatically every 30 minutes to pick up new registrations.
+On server startup, member data is **synced from Google Sheets into a local SQLite database**. The committee spreadsheet is synced into its own `committee` table, while registration sheets are synced into the `members` table. All attendance check-ins, member lookups, and admin queries are served from SQLite — instant and zero rate-limit issues. The sync re-runs automatically every 30 minutes to pick up new registrations.
 
 ```
 Google Forms → Google Sheets (member registration)
@@ -97,11 +97,20 @@ To add more spreadsheets (e.g., different terms), just add more entries:
 ]
 ```
 
+**Committee spreadsheet** — add an entry with `"type": "committee"`. Committee Student IDs are checked **first** at lookup time, so committee members always get their gold card instead of a regular membership card:
+
+```json
+[
+  { "id": "committee-sheet-id", "label": "Committee", "type": "committee" },
+  { "id": "term-sheet-id", "label": "Term 25/26" }
+]
+```
+
 Each spreadsheet must be **shared** with your service account email as **Editor**.
 
 ### 5. Expected sheet format
 
-The system auto-detects columns by header name. Supported column names:
+The system auto-detects columns by header name. Supported column names for **member (registration) sheets**:
 
 | Field | Expected headers |
 |---|---|
@@ -112,6 +121,34 @@ The system auto-detects columns by header name. Supported column names:
 | Expiry Date | `expiry_date`, `Expiry Date` |
 
 The system scans all tabs in each spreadsheet (except tabs named `Attendance`) and detects headers from any of the first 10 rows.
+
+**Committee sheet** — the committee spreadsheet expects these columns:
+
+| Field | Expected headers |
+|---|---|
+| Name | `name`, `Full Name`, `full_name` |
+| Student ID | `student_id`, `Student ID`, `Student ID:` |
+| Position | `position`, `Position` |
+| Status | `status`, `Status` (e.g. `Active`, `Probation`) |
+
+### 6. Configure session schedule
+
+Attendance is only recorded during the club's sessions. The schedule lives in `server/session-config.json` (this file is tracked in git, unlike other `*.json` files):
+
+```json
+{
+  "days": [2, 3],
+  "start": "19:50",
+  "end": "22:00",
+  "timezone": "Asia/Kuala_Lumpur"
+}
+```
+
+- `days` — day-of-week numbers, `0` (Sun) through `6` (Sat). `[2, 3]` = Tuesday and Wednesday
+- `start` / `end` — local wall-clock times; `end` is **exclusive** (22:00 is not counted)
+- `timezone` — the timezone used to evaluate "now" (Asia/Kuala_Lumpur by default), so session timing works correctly on Vercel / Render
+
+Outside the window, student IDs are still looked up and their card is shown (a **membership check**), but **no attendance is recorded**. `GET /api/session` returns the current session state and which day is active.
 
 ## Running
 
@@ -127,9 +164,9 @@ On startup you'll see:
 ```
 [DB] SQLite database initialized
 [Sync] Starting Google Sheets → SQLite sync...
-[Sync] Term 24/25: 326 members synced
 [Sync] Term 25/26: 61 members synced
-[Sync] Term 23/25: 228 members synced
+[Sync] Term 26/27: 55 members synced
+[Sync] Committee: 12 committee members synced
 [Sync] Complete in 4.1s — 435 unique members in DB (3 sheets OK, 0 failed)
 Server running on port 3001
 ```
@@ -161,14 +198,28 @@ cd server && npm start
 
 1. Open the website
 2. Enter your **Student ID** and click **Submit**
-3. Your digital membership card is displayed with:
+
+The page shows one pill per session day (Tue / Wed). When a session is open, its pill is highlighted gold with "Session open now" and the remaining time.
+
+**During a session** (Tue & Wed, 7:50 PM – 10:00 PM KL), checking in records your attendance:
+
+- Your digital membership card is displayed with:
    - Student ID and membership status badge (Active / Expired)
    - Full Name
    - Member Since and Valid Thru dates (formatted as "DD MMM YYYY")
    - Swimming Level banner (color-coded: Blue = Beginner, Green = Intermediate, Red = Advanced)
-   - If expired, a red "Membership Expired" bar appears below the card
+   - A green "✓ Attendance recorded successfully" message
+- If expired, a red "Membership Expired" bar appears below the card
+- Checking in multiple times on the same day shows the card again with "already checked in" and does **not** record a duplicate
 
-If you check in multiple times on the same day, the card is shown again without recording a duplicate.
+**Outside a session**, the card is still shown as a **membership check** — your membership is verified but **no attendance is recorded** and no success message appears.
+
+**Committee members** are recognized first (their Student ID is checked against the committee sheet before the member records):
+
+- A **gold** card with a "COMMITTEE" badge
+- The Status row shows their committee status (e.g. Active / Probation)
+- A gold banner shows their **position** (e.g. "President", "Assistant Secretary")
+- No message appears below the card (their attendance is still recorded during sessions, but no confirmation is shown)
 
 ### Admin Dashboard
 
@@ -186,20 +237,22 @@ Navigate to `/admin` and log in with the configured admin password (`ADMIN_PASSW
 │   ├── public/                 # Static assets (logo)
 │   ├── src/
 │   │   ├── pages/              # AttendancePage, MembershipCardPage, AdminDashboardPage
-│   │   ├── components/         # MembershipCard
+│   │   ├── components/         # MembershipCard, SessionBars
 │   │   └── api/                # attendance.js, admin.js
-│   ├── tailwind.config.js      # Dark metallic theme
+│   ├── tailwind.config.js      # Dark metallic theme (+ gold committee colors)
 │   └── package.json
 ├── server/                     # Express backend
 │   ├── db/
 │   │   ├── members.js          # Members table: init, upsert, find, getAllMap
+│   │   ├── committee.js        # Committee table: init, upsert, find, getAllMap
 │   │   └── attendance.js       # Attendance table: init, insert, query, summary
 │   ├── routes/                 # attendance.js, member.js, admin.js
-│   ├── services/               # googleSheets.js (Sheets API + date parsing)
+│   ├── services/               # googleSheets.js (Sheets API + date parsing), session.js
 │   ├── database.js             # Re-exports from db/ modules
 │   ├── sync.js                 # Google Sheets → SQLite sync orchestrator
 │   ├── index.js                # Server entry point (init DB, sync, schedule)
-│   ├── sheets-config.json      # Spreadsheet list
+│   ├── sheets-config.json      # Spreadsheet list (member + committee sheets)
+│   ├── session-config.json     # Session schedule (days, start/end, timezone)
 │   ├── members.db              # SQLite members database (auto-created)
 │   ├── attendance.db           # SQLite attendance database (auto-created)
 │   └── package.json
@@ -216,10 +269,16 @@ Navigate to `/admin` and log in with the configured admin password (`ADMIN_PASSW
 - **Date normalization** — All dates normalized to "DD MMM YYYY" format on the server, fixing locale parsing issues.
 - **Auto-calculated expiry** — When a member's expiry date is missing from the sheet, it is automatically computed as `date_joined + 1 year`.
 - **Empty name warning** — If a member's name is missing from the records, the card shows "Name not available" with a prompt to contact the admin.
+- **Committee support** — Committee members are checked against the committee sheet **first** and get a gold card showing their position and status (Active / Probation), instead of a regular membership card.
+- **Session-based attendance** — Attendance is only recorded during configured sessions (Tue & Wed 7:50–10:00 PM, configurable via `session-config.json`). Membership checks work anytime.
+- **Live session indicator** — Per-day session bars on the attendance page highlight the open session with "Session open now".
 - **Level color coding** — Beginner (blue), Intermediate (green), Advanced (red).
 - **Expired membership** — Shows a red "Membership Expired" bar below the card when past the expiry date.
 - **Admin dashboard** — Password-protected dashboard with summary stats, filterable attendance table, and print support. Rate-limited to 5 login attempts per 15 minutes.
 
-things to improve later:
-- differentiate attendance and checking the membership validation
-- add committee into the system
+## things to improve later:
+
+- add QR code scanning so members can check in by scanning a QR at the pool
+- add member profile pages (view own attendance history)
+- add committee management UI (add/remove members, update positions/status)
+- add email renewal reminders when membership is close to expiring

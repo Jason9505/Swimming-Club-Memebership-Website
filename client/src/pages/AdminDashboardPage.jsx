@@ -109,13 +109,15 @@ export default function AdminDashboardPage() {
 
   const statusBadge = (status) => {
     const isActive = status === 'Active'
+    const isCommittee = status === 'Committee'
+    const cls = isActive
+      ? 'bg-emerald-900/60 text-emerald-300 border border-emerald-700'
+      : isCommittee
+        ? 'bg-gold/20 text-goldLight border border-gold'
+        : 'bg-red-900/60 text-red-300 border border-red-700'
     return (
       <span
-        className={`inline-block text-xs font-semibold px-2.5 py-1 rounded-full uppercase tracking-wider ${
-          isActive
-            ? 'bg-emerald-900/60 text-emerald-300 border border-emerald-700'
-            : 'bg-red-900/60 text-red-300 border border-red-700'
-        }`}
+        className={`inline-block text-xs font-semibold px-2.5 py-1 rounded-full uppercase tracking-wider ${cls}`}
       >
         {status}
       </span>

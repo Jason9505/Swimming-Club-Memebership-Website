@@ -4,6 +4,7 @@ import {
   getAttendanceRows,
   getAttendanceSummary,
   getAllMembersMap,
+  getAllCommitteeMap,
 } from '../database.js'
 import { parseDate } from '../services/googleSheets.js'
 
@@ -68,18 +69,22 @@ router.get('/admin/attendance', requireAdmin, async (req, res) => {
 
     const attRows = getAttendanceRows(filters)
     const membersMap = getAllMembersMap()
+    const committeeMap = getAllCommitteeMap()
     const now = new Date()
 
     const records = attRows.map((row) => {
       const sid = (row.student_id || '').trim()
+      const committeeMember = committeeMap[sid]
       const member = membersMap[sid]
       const expiry = member ? parseDate(member.expiryDate) : null
-      const computedStatus = expiry && now > expiry ? 'Expired' : (row.membership_status || 'Active')
+      const computedStatus = committeeMember
+        ? 'Committee'
+        : expiry && now > expiry ? 'Expired' : (row.membership_status || 'Active')
 
       return {
         timestamp: row.timestamp,
         studentId: sid,
-        fullName: row.fullName || '',
+        fullName: row.full_name || '',
         faculty: row.faculty || '',
         swimmingLevel: member?.level || '',
         membershipStatus: computedStatus,

@@ -17,3 +17,9 @@ export async function getMember(studentId) {
   if (!res.ok) throw new Error(data.error || 'Something went wrong')
   return data
 }
+
+export async function getSessionInfo() {
+  const res = await fetch(`${API_BASE}/session`)
+  if (!res.ok) throw new Error('Failed to fetch session info')
+  return res.json()
+}

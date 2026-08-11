@@ -1,5 +1,5 @@
 import { Router } from 'express'
-import { findMember } from '../database.js'
+import { findMember, findCommitteeMember } from '../database.js'
 import { parseDate } from '../services/googleSheets.js'
 
 const router = Router()
@@ -7,6 +7,19 @@ const router = Router()
 router.get('/member/:studentId', async (req, res) => {
   try {
     const { studentId } = req.params
+
+    const committeeMember = findCommitteeMember(studentId)
+    if (committeeMember) {
+      return res.json({
+        studentId: committeeMember.studentId,
+        fullName: committeeMember.fullName,
+        position: committeeMember.position,
+        status: committeeMember.status,
+        isCommittee: true,
+        membershipStatus: 'Committee',
+        showDigitalCard: true,
+      })
+    }
 
     const member = findMember(studentId)
     if (!member) {

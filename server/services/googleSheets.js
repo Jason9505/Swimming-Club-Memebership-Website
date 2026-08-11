@@ -72,6 +72,8 @@ const COLUMN_ALIASES = {
   expiryDate: ['expiry_date', 'expiry date', 'expiry', 'valid thru'],
   gender: ['gender'],
   faculty: ['faculty'],
+  position: ['position'],
+  status: ['status'],
 }
 
 function normalizeHeader(h) {
@@ -177,6 +179,8 @@ function extractMemberRow(headers, row) {
     level: extractField(headers, row, 'level'),
     gender: extractField(headers, row, 'gender'),
     faculty: extractField(headers, row, 'faculty'),
+    position: extractField(headers, row, 'position'),
+    status: extractField(headers, row, 'status'),
   }
 }
 

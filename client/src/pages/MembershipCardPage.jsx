@@ -83,9 +83,15 @@ export default function MembershipCardPage() {
         )}
 
         <div className="mt-8 text-center">
-          <p className="text-green-400/80 text-sm font-medium mb-6">
-            ✓ Attendance recorded successfully
-          </p>
+          {member.isCommittee ? null : member.attendanceRecorded ? (
+            <p className="text-green-400/80 text-sm font-medium mb-6">
+              ✓ Attendance recorded successfully
+            </p>
+          ) : member.isSessionTime ? (
+            <p className="text-gray-400 text-sm font-medium mb-6">
+              ✓ You've already checked in for today's session
+            </p>
+          ) : null}
           <button
             onClick={() => navigate('/')}
             className="px-6 py-3 rounded-xl bg-metallic-700 border border-gray-600/50 text-gray-300 font-medium text-sm hover:bg-metallic-600 transition-all"

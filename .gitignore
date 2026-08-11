@@ -1,5 +1,7 @@
 node_modules/
 *.json
+!server/sheets-config.json
+!server/session-config.json
 .env
 server/config/credentials.json
 dist/

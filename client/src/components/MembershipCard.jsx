@@ -4,12 +4,6 @@ const LEVEL_COLORS = {
   Advanced: 'bg-advanced',
 }
 
-const LEVEL_TEXT_COLORS = {
-  Beginner: 'text-beginner',
-  Intermediate: 'text-intermediate',
-  Advanced: 'text-advanced',
-}
-
 export default function MembershipCard({ member }) {
   const {
     studentId,
@@ -18,11 +12,13 @@ export default function MembershipCard({ member }) {
     membershipStatus,
     memberSince,
     validThru,
+    isCommittee,
+    position,
+    status,
   } = member
 
   const expired = membershipStatus === 'Expired'
   const levelColor = LEVEL_COLORS[swimmingLevel] || 'bg-gray-500'
-  const levelTextColor = LEVEL_TEXT_COLORS[swimmingLevel] || 'text-gray-400'
 
   function formatDate(dateStr) {
     if (!dateStr) return '—'
@@ -45,13 +41,15 @@ export default function MembershipCard({ member }) {
             <div
               className={`
                 text-xs font-semibold px-3 py-1 rounded-full uppercase tracking-wider
-                ${expired
-                  ? 'bg-red-900/60 text-red-300 border border-red-700'
-                  : 'bg-emerald-900/60 text-emerald-300 border border-emerald-700'
+                ${isCommittee
+                  ? 'bg-gold/20 text-goldLight border border-gold'
+                  : expired
+                    ? 'bg-red-900/60 text-red-300 border border-red-700'
+                    : 'bg-emerald-900/60 text-emerald-300 border border-emerald-700'
                 }
               `}
             >
-              {membershipStatus || 'Unknown'}
+              {isCommittee ? 'Committee' : membershipStatus || 'Unknown'}
             </div>
           </div>
 
@@ -61,42 +59,63 @@ export default function MembershipCard({ member }) {
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-3 text-center mb-4">
-            <div>
-              <div className="text-[10px] uppercase tracking-widest text-gray-500 mb-1">
-                Member Since
-              </div>
-              <div className="text-sm font-medium text-gray-300">
-                {formatDate(memberSince)}
-              </div>
-            </div>
-            <div>
-              <div className="text-[10px] uppercase tracking-widest text-gray-500 mb-1">
-                Valid Thru
-              </div>
-              <div className="text-sm font-medium text-gray-300">
-                {formatDate(validThru)}
+          {isCommittee ? (
+            <div className="grid grid-cols-1 gap-3 text-center mb-4">
+              <div>
+                <div className="text-[10px] uppercase tracking-widest text-gray-500 mb-1">
+                  Status
+                </div>
+                <div className="text-sm font-bold tracking-wider text-goldLight">
+                  {status || '—'}
+                </div>
               </div>
             </div>
-            <div>
-              <div className="text-[10px] uppercase tracking-widest text-gray-500 mb-1">
-                Status
+          ) : (
+            <div className="grid grid-cols-3 gap-3 text-center mb-4">
+              <div>
+                <div className="text-[10px] uppercase tracking-widest text-gray-500 mb-1">
+                  Member Since
+                </div>
+                <div className="text-sm font-medium text-gray-300">
+                  {formatDate(memberSince)}
+                </div>
               </div>
-              <div className="text-sm font-bold tracking-wider text-gray-200">
-                MEMBER
+              <div>
+                <div className="text-[10px] uppercase tracking-widest text-gray-500 mb-1">
+                  Valid Thru
+                </div>
+                <div className="text-sm font-medium text-gray-300">
+                  {formatDate(validThru)}
+                </div>
+              </div>
+              <div>
+                <div className="text-[10px] uppercase tracking-widest text-gray-500 mb-1">
+                  Status
+                </div>
+                <div className="text-sm font-bold tracking-wider text-gray-200">
+                  MEMBER
+                </div>
               </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
 
-      <div className={`rounded-2xl overflow-hidden shadow-xl ${levelColor} px-6 py-3 text-center`}>
-        <span className="text-white font-bold text-lg tracking-[0.3em] uppercase">
-          {swimmingLevel || 'N/A'}
-        </span>
-      </div>
+      {isCommittee ? (
+        <div className="rounded-2xl overflow-hidden shadow-xl bg-gradient-to-r from-gold to-goldLight px-6 py-3 text-center">
+          <span className="text-gray-900 font-bold text-lg tracking-[0.3em] uppercase">
+            {position || 'COMMITTEE'}
+          </span>
+        </div>
+      ) : (
+        <div className={`rounded-2xl overflow-hidden shadow-xl ${levelColor} px-6 py-3 text-center`}>
+          <span className="text-white font-bold text-lg tracking-[0.3em] uppercase">
+            {swimmingLevel || 'N/A'}
+          </span>
+        </div>
+      )}
 
-      {expired && (
+      {!isCommittee && expired && (
         <div className="rounded-2xl bg-red-900/80 border border-red-700 px-6 py-2 text-center">
           <span className="text-red-300 font-bold text-sm tracking-wider">
             Membership Expired
