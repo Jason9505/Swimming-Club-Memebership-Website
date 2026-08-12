@@ -1,5 +1,4 @@
 import express from 'express'
-import cors from 'cors'
 import helmet from 'helmet'
 import morgan from 'morgan'
 import rateLimit from 'express-rate-limit'
@@ -44,8 +43,28 @@ app.use(session({
   },
 }))
 
-const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || 'http://localhost:5173'
-app.use(cors({ origin: ALLOWED_ORIGIN, credentials: true }))
+const allowedOrigins = (process.env.ALLOWED_ORIGIN || '')
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean)
+
+app.use((req, res, next) => {
+  const origin = req.headers.origin
+  if (origin) {
+    const sameOrigin =
+      origin === `https://${req.get('host')}` ||
+      origin === `http://${req.get('host')}`
+    if (sameOrigin || allowedOrigins.includes(origin)) {
+      res.setHeader('Vary', 'Origin')
+      res.setHeader('Access-Control-Allow-Origin', origin)
+      res.setHeader('Access-Control-Allow-Credentials', 'true')
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+    }
+    if (req.method === 'OPTIONS') return res.sendStatus(204)
+  }
+  next()
+})
 
 app.use(rateLimit({
   windowMs: 15 * 60 * 1000,
