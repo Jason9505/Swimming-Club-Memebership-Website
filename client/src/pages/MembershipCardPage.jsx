@@ -89,7 +89,7 @@ export default function MembershipCardPage() {
             </p>
           ) : member.isSessionTime ? (
             <p className="text-gray-400 text-sm font-medium mb-6">
-              ✓ You've already checked in for today's session
+              ✓ You've already checked in for Today's session
             </p>
           ) : null}
           <button
