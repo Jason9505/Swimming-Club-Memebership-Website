@@ -1,19 +1,13 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { submitAttendance, getSessionInfo } from '../api/attendance'
+import { submitAttendance } from '../api/attendance'
 import { login } from '../api/admin'
-import SessionBars from '../components/SessionBars'
 
 export default function AttendancePage() {
   const [studentId, setStudentId] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [session, setSession] = useState(null)
   const navigate = useNavigate()
-
-  useEffect(() => {
-    getSessionInfo().then(setSession).catch(() => {})
-  }, [])
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -54,8 +48,6 @@ export default function AttendancePage() {
         <h1 className="text-2xl font-light text-gray-300 mb-8">
           Enter Student ID
         </h1>
-
-        <SessionBars session={session} />
 
         <form onSubmit={handleSubmit} className="space-y-5">
           <input
