@@ -2,6 +2,7 @@ import { Router } from 'express'
 import { findMember, findCommitteeMember, getAttendanceForStudentToday, insertAttendance } from '../database.js'
 import { parseDate } from '../services/googleSheets.js'
 import { isSessionTime, getSessionInfo } from '../services/session.js'
+import { maybeSync } from '../sync.js'
 
 const router = Router()
 
@@ -16,15 +17,17 @@ router.post('/attendance', async (req, res) => {
       return res.status(400).json({ error: 'Student ID is required.' })
     }
 
+    await maybeSync()
+
     const now = new Date()
     const inSession = isSessionTime(now)
-    const alreadyRecorded = inSession && getAttendanceForStudentToday(studentId)
+    const alreadyRecorded = inSession && await getAttendanceForStudentToday(studentId)
     const attendanceRecorded = inSession && !alreadyRecorded
 
-    const committeeMember = findCommitteeMember(studentId)
+    const committeeMember = await findCommitteeMember(studentId)
     if (committeeMember) {
       if (attendanceRecorded) {
-        insertAttendance({
+        await insertAttendance({
           timestamp: now.toISOString(),
           studentId: committeeMember.studentId,
           fullName: committeeMember.fullName,
@@ -47,7 +50,7 @@ router.post('/attendance', async (req, res) => {
       })
     }
 
-    const member = findMember(studentId)
+    const member = await findMember(studentId)
     if (!member) {
       return res.status(404).json({ error: 'Student ID Not Found' })
     }
@@ -56,7 +59,7 @@ router.post('/attendance', async (req, res) => {
     const membershipStatus = expiry && now > expiry ? 'Expired' : 'Active'
 
     if (attendanceRecorded) {
-      insertAttendance({
+      await insertAttendance({
         timestamp: now.toISOString(),
         studentId: member.studentId,
         fullName: member.fullName,

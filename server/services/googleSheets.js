@@ -13,9 +13,15 @@ let jwtClient = null
 async function getAuthClient() {
   if (jwtClient) return jwtClient
 
-  const credsPath = process.env.GOOGLE_SHEETS_CREDENTIALS_PATH
-  const resolvedPath = path.resolve(__dirname, '..', credsPath || '')
-  const credentials = JSON.parse(readFileSync(resolvedPath, 'utf8'))
+  let credentials
+  const credsJson = process.env.GOOGLE_SHEETS_CREDENTIALS_JSON
+  if (credsJson) {
+    credentials = JSON.parse(credsJson)
+  } else {
+    const credsPath = process.env.GOOGLE_SHEETS_CREDENTIALS_PATH
+    const resolvedPath = path.resolve(__dirname, '..', credsPath || '')
+    credentials = JSON.parse(readFileSync(resolvedPath, 'utf8'))
+  }
 
   jwtClient = new JWT({
     email: credentials.client_email,
@@ -258,6 +264,19 @@ export async function getMemberRows(sheetId) {
   }
 
   return allMembers
+}
+
+export async function getSheetRowCounts(sheetId) {
+  const info = await apiWithRetry(sheetId, 'GET', '')
+  const counts = {}
+
+  for (const tab of info.sheets || []) {
+    const name = tab.properties.title
+    if (name === 'Attendance') continue
+    counts[name] = tab.properties?.gridProperties?.rowCount || 0
+  }
+
+  return counts
 }
 
 export async function ensureAttendanceSheet(sheetId) {

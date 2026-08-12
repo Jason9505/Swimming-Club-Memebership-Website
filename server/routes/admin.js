@@ -67,9 +67,9 @@ router.get('/admin/attendance', requireAdmin, async (req, res) => {
     if (faculty) filters.faculty = faculty
     if (membershipStatus) filters.membershipStatus = membershipStatus
 
-    const attRows = getAttendanceRows(filters)
-    const membersMap = getAllMembersMap()
-    const committeeMap = getAllCommitteeMap()
+    const attRows = await getAttendanceRows(filters)
+    const membersMap = await getAllMembersMap()
+    const committeeMap = await getAllCommitteeMap()
     const now = new Date()
 
     const records = attRows.map((row) => {
@@ -100,7 +100,7 @@ router.get('/admin/attendance', requireAdmin, async (req, res) => {
 
 router.get('/admin/summary', requireAdmin, async (req, res) => {
   try {
-    const summary = getAttendanceSummary()
+    const summary = await getAttendanceSummary()
     res.json(summary)
   } catch (err) {
     console.error('Admin summary error:', err)

@@ -8,28 +8,40 @@ A web-based attendance and membership tracking system for the MMU Swimming Club.
 |---|---|
 | Frontend | React + Vite + Tailwind CSS |
 | Backend | Node.js + Express |
-| Database | SQLite (synced from Google Sheets) |
+| Database | PostgreSQL (Neon), synced from Google Sheets |
 | Auth | Password-based session auth (admin) |
-| Hosting | Vercel / Render |
+| Hosting | Vercel |
 
 ## Prerequisites
 
 - [Node.js](https://nodejs.org/) v18 or higher
+- A PostgreSQL database (e.g. [Neon](https://neon.tech) — free tier is plenty), used as the primary data store
 - A Google Cloud service account with the Google Sheets API enabled
 - A Google Sheet with member data shared with the service account
 
 ## How It Works
 
-On server startup, member data is **synced from Google Sheets into a local SQLite database**. The committee spreadsheet is synced into its own `committee` table, while registration sheets are synced into the `members` table. All attendance check-ins, member lookups, and admin queries are served from SQLite — instant and zero rate-limit issues. The sync re-runs automatically every 30 minutes to pick up new registrations.
+Member data is **synced from Google Sheets into a hosted PostgreSQL database**. The committee spreadsheet is synced into its own `committee` table, while registration sheets are synced into the `members` table. All attendance check-ins, member lookups, and admin queries are served from Postgres — instant and zero rate-limit issues.
+
+Because the app runs on serverless functions (no long-running process), there are no background timers. Instead, the sync is **on-demand**:
+
+- Every attendance / member lookup triggers a cheap freshness check against a `sync_state` table (one `UPDATE`). If the last sync is older than 5 minutes, the sync runs right then, guarded by an atomic lock so only one instance syncs at a time.
+- A daily cron (Vercel Cron, `0 0 * * *` UTC) calls `GET /api/sync` as a safety net — this also picks up edits to existing cells, which the freshness check alone would eventually catch.
+- On server startup, a full sync runs once.
+
+New registrations therefore appear in the database within seconds of the **first request** after a form response lands — no polling needed.
+
+- `SYNC_STALE_MS` — how old the last sync must be before a request triggers a re-sync (default `300000` / 5 min).
+- `SYNC_LOCK_MS` — how long a stuck sync lock is considered stale (default `600000` / 10 min).
 
 ```
 Google Forms → Google Sheets (member registration)
-                    ↓ sync (startup + every 30 min)
-                  SQLite (primary data store)
+                    ↓ sync (startup + on-demand + daily cron)
+          PostgreSQL (Neon — primary data store)
                     ↓
-         Express API (instant local reads)
+         Express API (instant reads)
                     ↓
-              React frontend
+          React frontend (served by Vercel CDN)
 ```
 
 ## Setup
@@ -44,7 +56,7 @@ cd client && npm install
 cd ../server && npm install
 ```
 
-> **Note:** If you're switching between Windows CMD and WSL, delete `node_modules` and reinstall in the terminal you'll use. Native modules (`better-sqlite3`, `rolldown`) compile platform-specific binaries.
+> **Note:** If you're switching between Windows CMD and WSL, delete `node_modules` and reinstall in the terminal you'll use.
 
 ### 2. Get your own Google Sheets API credentials
 
@@ -58,24 +70,35 @@ cd ../server && npm install
 6. A JSON key file will be downloaded — rename it (e.g. `swimming-club-credentials.json`) and place it in the project root folder
 7. Share your Google Sheet with the service account email as **Editor**
 
-### 3. Configure environment variables
+### 3. Create a PostgreSQL database
+
+Create a Postgres database (e.g. [Neon](https://neon.tech), or via the Vercel Marketplace → Postgres). Copy the pooled connection string (the `-pooler` one) — this is your `DATABASE_URL`.
+
+### 4. Configure environment variables
 
 Create a `.env` file in the project root:
 
 ```env
 PORT=3001
+DATABASE_URL=postgres://user:password@host/dbname
 GOOGLE_SHEETS_CREDENTIALS_PATH="../your-credentials-file.json"
+# OR, if you don't want to manage the file on the server:
+# GOOGLE_SHEETS_CREDENTIALS_JSON={"type":"service_account","project_id":...}
 ADMIN_PASSWORD=your-secure-password
 SESSION_SECRET=your-session-secret
+CRON_SECRET=your-cron-secret
 ALLOWED_ORIGIN=http://localhost:5173
 ```
 
-- `GOOGLE_SHEETS_CREDENTIALS_PATH` — points to your downloaded JSON key file
+- `DATABASE_URL` — connection string for your Postgres database (required)
+- `GOOGLE_SHEETS_CREDENTIALS_PATH` — path to your downloaded JSON key file (local dev). On Vercel, set `GOOGLE_SHEETS_CREDENTIALS_JSON` to the full JSON string instead.
 - `ADMIN_PASSWORD` — password used to log in to the admin dashboard
 - `SESSION_SECRET` — secret for signing session cookies (use a random string)
+- `CRON_SECRET` — secret used to protect the `/api/sync` endpoint (Vercel sends it as `Authorization: Bearer`)
 - `ALLOWED_ORIGIN` — the frontend URL allowed by CORS (default: `http://localhost:5173`)
+- `SYNC_STALE_MS` — re-sync threshold for on-demand sync (default: `300000`)
 
-### 4. Configure spreadsheet files
+### 5. Configure spreadsheet files
 
 Open `server/sheets-config.json` and add your spreadsheet IDs:
 
@@ -108,7 +131,7 @@ To add more spreadsheets (e.g., different terms), just add more entries:
 
 Each spreadsheet must be **shared** with your service account email as **Editor**.
 
-### 5. Expected sheet format
+### 6. Expected sheet format
 
 The system auto-detects columns by header name. Supported column names for **member (registration) sheets**:
 
@@ -131,7 +154,7 @@ The system scans all tabs in each spreadsheet (except tabs named `Attendance`) a
 | Position | `position`, `Position` |
 | Status | `status`, `Status` (e.g. `Active`, `Probation`) |
 
-### 6. Configure session schedule
+### 7. Configure session schedule
 
 Attendance is only recorded during the club's sessions. The schedule lives in `server/session-config.json` (this file is tracked in git, unlike other `*.json` files):
 
@@ -162,16 +185,16 @@ npm run dev
 On startup you'll see:
 
 ```
-[DB] SQLite database initialized
-[Sync] Starting Google Sheets → SQLite sync...
-[Sync] Term 25/26: 61 members synced
-[Sync] Term 26/27: 55 members synced
-[Sync] Committee: 12 committee members synced
-[Sync] Complete in 4.1s — 435 unique members in DB (3 sheets OK, 0 failed)
+[DB] Postgres database initialized (members + committee + attendance + session)
+[Sync] Starting Google Sheets → Postgres sync...
+[Sync] Term 25/26: 528 members synced
+[Sync] Term 26/27: 46 members synced
+[Sync] Committee: 19 committee members synced
+[Sync] Complete in 6.5s — 393 unique members, 19 committee in DB (3 sheets OK, 0 failed)
 Server running on port 3001
 ```
 
-The server is **not ready** until you see `Server running on port 3001`. The initial sync takes ~5 seconds. After that, re-syncs happen silently every 30 minutes in the background.
+The server is **not ready** until you see `Server running on port 3001`. The initial sync takes ~5 seconds. After that, re-syncs happen on-demand (when a lookup finds the data older than 5 minutes) and via a daily cron.
 
 ### Step 2 — Start the Frontend (Terminal 2)
 
@@ -185,12 +208,61 @@ The frontend runs at `http://localhost:5173` and proxies API requests to the bac
 ### Production
 
 ```bash
-# Build frontend
+# Build frontend (outputs to server/public)
 cd client && npm run build
 
-# Start backend (serves built frontend from client/dist)
+# Start backend (serves built frontend from server/public)
 cd server && npm start
 ```
+
+## Deploying to Vercel
+
+The backend is an Express app deployed as a Vercel **Node.js Backend** (single project, same-origin). The React build is produced during the Vercel build and served from `server/public/`.
+
+### 1. Create a Neon Postgres database
+
+Use the Vercel Marketplace (Storage → Postgres) or [console.neon.tech](https://console.neon.tech). Copy the pooled `DATABASE_URL`.
+
+### 2. Create the Vercel project
+
+Import this repo into Vercel (or use `vercel link`), then set:
+
+- **Root Directory**: `server`
+- **Framework Preset**: Node.js (entrypoint `index.js` is auto-detected)
+- **Build Command**: `npm run build` (defined in `server/package.json` — it installs and builds the client into `server/public`)
+- **Install Command**: `npm install`
+
+### 3. Set environment variables (Vercel project → Settings → Environment Variables)
+
+| Variable | Value |
+|---|---|
+| `DATABASE_URL` | Neon pooled connection string |
+| `GOOGLE_SHEETS_CREDENTIALS_JSON` | Full service-account JSON (paste as one string) |
+| `ADMIN_PASSWORD` | Admin dashboard password |
+| `SESSION_SECRET` | Random string |
+| `CRON_SECRET` | Random string |
+
+Apply to **Production** (and Preview if you want). Then **Deploy**.
+
+### 4. Sync schedule on Vercel
+
+`server/vercel.json` registers a daily cron (`0 0 * * *` UTC) that calls `GET /api/sync`. The route only runs for requests carrying `Authorization: Bearer <CRON_SECRET>` (or an admin session), so it can't be abused. On the free Hobby plan crons run once per day; the on-demand freshness check keeps member data current the rest of the time. On Pro, you can change the schedule to e.g. `*/15 * * * *` for more frequent refreshes.
+
+### 5. Verify
+
+- `GET /ping` → `{"ok":true}`
+- `GET /api/session` → session schedule + active state
+- Enter a real Student ID on the homepage → digital card appears
+- `GET /card` and `/admin` load the SPA (client-side routes fall back to `index.html`)
+- Admin login works and the session survives redeploys (sessions live in Postgres)
+- The daily cron shows a green success in the Vercel dashboard → Cron Jobs
+
+> **Troubleshooting:** If client-side routes like `/card` or `/admin` return a 404 on Vercel (Vercel's CDN answers before the Express catch-all), the static files aren't being bundled into the Lambda. Check `server/vercel.json` has `"includeFiles": "public/**"` under `functions.index.js`. The `express.static()` call is ignored on Vercel — the `public/` folder is served by the CDN, and the catch-all is only for the SPA fallback.
+
+### Local dev against Postgres
+
+The old `*.db` SQLite files are no longer used. To run locally, set `DATABASE_URL` in the root `.env` to your Neon connection string, then `cd server && npm run dev`. All data (members, attendance, admin sessions) lives in Postgres, so local and deployed apps share the same data.
+
 
 ## Usage
 
@@ -243,18 +315,19 @@ Navigate to `/admin` and log in with the configured admin password (`ADMIN_PASSW
 │   └── package.json
 ├── server/                     # Express backend
 │   ├── db/
+│   │   ├── index.js            # Postgres pool + schema bootstrap
 │   │   ├── members.js          # Members table: init, upsert, find, getAllMap
 │   │   ├── committee.js        # Committee table: init, upsert, find, getAllMap
 │   │   └── attendance.js       # Attendance table: init, insert, query, summary
 │   ├── routes/                 # attendance.js, member.js, admin.js
 │   ├── services/               # googleSheets.js (Sheets API + date parsing), session.js
 │   ├── database.js             # Re-exports from db/ modules
-│   ├── sync.js                 # Google Sheets → SQLite sync orchestrator
-│   ├── index.js                # Server entry point (init DB, sync, schedule)
+│   ├── sync.js                 # Google Sheets → Postgres sync orchestrator (+ on-demand maybeSync)
+│   ├── index.js                # Server entry point (init DB, sync, SPA serving)
 │   ├── sheets-config.json      # Spreadsheet list (member + committee sheets)
 │   ├── session-config.json     # Session schedule (days, start/end, timezone)
-│   ├── members.db              # SQLite members database (auto-created)
-│   ├── attendance.db           # SQLite attendance database (auto-created)
+│   ├── vercel.json             # Vercel config: cron + Lambda includeFiles
+│   ├── public/                 # Built React app (auto-generated by `npm run build` in client/)
 │   └── package.json
 ├── .env                        # Credentials and config
 └── PRD.txt                     # Product requirements
@@ -262,8 +335,8 @@ Navigate to `/admin` and log in with the configured admin password (`ADMIN_PASSW
 
 ## Key Features
 
-- **SQLite primary store** — All reads are instant local queries. No Google Sheets API rate limits.
-- **Auto-sync** — Member data syncs from Google Sheets on startup and every 30 minutes.
+- **PostgreSQL primary store** — All reads are instant queries against a hosted Postgres (Neon). No Google Sheets API rate limits, and data survives on serverless.
+- **Auto-sync** — Member data syncs from Google Sheets on startup, on-demand (when data is stale), and via a daily cron.
 - **Multi-sheet support** — Searches across multiple spreadsheets and tabs. Students in multiple terms are matched by latest registration, with missing fields filled from older records.
 - **Duplicate handling** — Same Student ID cannot check in twice on the same day.
 - **Date normalization** — All dates normalized to "DD MMM YYYY" format on the server, fixing locale parsing issues.
@@ -274,7 +347,7 @@ Navigate to `/admin` and log in with the configured admin password (`ADMIN_PASSW
 - **Live session indicator** — Per-day session bars on the attendance page highlight the open session with "Session open now".
 - **Level color coding** — Beginner (blue), Intermediate (green), Advanced (red).
 - **Expired membership** — Shows a red "Membership Expired" bar below the card when past the expiry date.
-- **Admin dashboard** — Password-protected dashboard with summary stats, filterable attendance table, and print support. Rate-limited to 5 login attempts per 15 minutes.
+- **Admin dashboard** — Password-protected dashboard with summary stats, filterable attendance table, and print support. Rate-limited to 5 login attempts per 15 minutes; sessions persist in Postgres so logins survive redeploys.
 
 ## things to improve later:
 

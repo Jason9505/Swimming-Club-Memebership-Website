@@ -1,14 +1,11 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { login, logout, checkAuth, getAttendance, getSummary } from '../api/admin'
+import { logout, checkAuth, getAttendance, getSummary } from '../api/admin'
 
 export default function AdminDashboardPage() {
   const navigate = useNavigate()
   const [authenticated, setAuthenticated] = useState(false)
   const [checking, setChecking] = useState(true)
-  const [password, setPassword] = useState('')
-  const [loginError, setLoginError] = useState('')
-  const [loginLoading, setLoginLoading] = useState(false)
 
   const [records, setRecords] = useState([])
   const [summary, setSummary] = useState({ totalAttendance: 0, activeMembers: 0, expiredMembers: 0 })
@@ -55,24 +52,9 @@ export default function AdminDashboardPage() {
     }
   }, [authenticated])
 
-  async function handleLogin(e) {
-    e.preventDefault()
-    setLoginLoading(true)
-    setLoginError('')
-    try {
-      await login(password)
-      setAuthenticated(true)
-    } catch (err) {
-      setLoginError(err.message)
-    } finally {
-      setLoginLoading(false)
-    }
-  }
-
   async function handleLogout() {
     await logout()
     setAuthenticated(false)
-    setPassword('')
     setRecords([])
     setSummary({ totalAttendance: 0, activeMembers: 0, expiredMembers: 0 })
   }
@@ -159,36 +141,14 @@ export default function AdminDashboardPage() {
             alt="MMU Swimming Club"
             className="h-20 mx-auto mb-6 object-contain"
           />
-          <h1 className="text-xl font-light text-gray-300 mb-1">Admin Login</h1>
-          <p className="text-xs text-gray-500 mb-6">Enter the admin password to continue</p>
-
-          <form onSubmit={handleLogin} className="space-y-4">
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Password"
-              autoFocus
-              className="w-full px-4 py-3 rounded-xl text-center text-sm tracking-wider bg-metallic-800 border border-gray-600/50 text-gray-100 placeholder-gray-600 outline-none transition-all duration-200 focus:border-gray-400 focus:ring-1 focus:ring-gray-400"
-            />
-            <button
-              type="submit"
-              disabled={loginLoading || !password}
-              className="w-full py-3 rounded-xl font-semibold tracking-wider text-sm bg-gradient-to-r from-gray-600 to-gray-500 text-gray-100 border border-gray-500/50 shadow-lg transition-all duration-200 hover:from-gray-500 hover:to-gray-400 active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              {loginLoading ? 'Logging in...' : 'Login'}
-            </button>
-          </form>
-
-          {loginError && (
-            <div className="mt-4 p-3 rounded-xl bg-red-900/30 border border-red-800/50">
-              <p className="text-red-300 text-sm">{loginError}</p>
-            </div>
-          )}
+          <h1 className="text-xl font-light text-gray-300 mb-2">Admin Dashboard</h1>
+          <p className="text-sm text-gray-500 mb-8">
+            This page is locked. Enter the admin password on the home page to open the dashboard.
+          </p>
 
           <button
             onClick={() => navigate('/')}
-            className="mt-6 text-xs text-gray-600 hover:text-gray-400 transition-colors"
+            className="px-6 py-3 rounded-xl bg-gradient-to-r from-gray-600 to-gray-500 text-gray-100 font-semibold hover:from-gray-500 hover:to-gray-400 transition-all"
           >
             Back to Attendance
           </button>

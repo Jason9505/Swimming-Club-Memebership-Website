@@ -2,7 +2,9 @@ node_modules/
 *.json
 !server/sheets-config.json
 !server/session-config.json
+!server/vercel.json
 .env
 server/config/credentials.json
 dist/
+server/public/
 *.db

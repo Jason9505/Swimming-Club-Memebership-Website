@@ -7,7 +7,11 @@ export async function submitAttendance(studentId) {
     body: JSON.stringify({ studentId }),
   })
   const data = await res.json()
-  if (!res.ok) throw new Error(data.error || 'Something went wrong')
+  if (!res.ok) {
+    const err = new Error(data.error || 'Something went wrong')
+    err.status = res.status
+    throw err
+  }
   return data
 }
 

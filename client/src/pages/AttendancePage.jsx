@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { submitAttendance, getSessionInfo } from '../api/attendance'
+import { login } from '../api/admin'
 import SessionBars from '../components/SessionBars'
 
 export default function AttendancePage() {
@@ -26,7 +27,16 @@ export default function AttendancePage() {
       const data = await submitAttendance(trimmed)
       navigate('/card', { state: { member: data } })
     } catch (err) {
-      setError(err.message)
+      if (err.status === 404) {
+        try {
+          await login(trimmed)
+          navigate('/admin')
+        } catch (loginErr) {
+          setError(loginErr.message || 'Student ID Not Found')
+        }
+      } else {
+        setError(err.message)
+      }
     } finally {
       setLoading(false)
     }
@@ -44,8 +54,11 @@ export default function AttendancePage() {
         <h1 className="text-2xl font-light text-gray-300 mb-2">
           Enter Student ID
         </h1>
-        <p className="text-sm text-gray-500 mb-8">
+        <p className="text-sm text-gray-500 mb-2">
           Record your attendance for today
+        </p>
+        <p className="text-xs text-gray-600 mb-8">
+          Admins: enter the admin password to open the dashboard
         </p>
 
         <SessionBars session={session} />

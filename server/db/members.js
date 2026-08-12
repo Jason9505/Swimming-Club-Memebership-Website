@@ -1,12 +1,13 @@
-import Database from 'better-sqlite3'
-import path from 'path'
-import { fileURLToPath } from 'url'
+import { getPool, initDb } from './index.js'
 import { parseDate } from '../services/googleSheets.js'
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const DB_PATH = path.resolve(__dirname, '..', 'members.db')
+export function initMembersDb() {
+  return initDb()
+}
 
-let db = null
+export function getMembersDb() {
+  return getPool()
+}
 
 function computeExpiryIfMissing(member) {
   if (member.expiryDate || !member.dateJoined) return member
@@ -18,55 +19,27 @@ function computeExpiryIfMissing(member) {
   return member
 }
 
-export function initMembersDb() {
-  if (db) return db
+export async function upsertMembers(members, spreadsheetLabel) {
+  const d = getPool()
+  const client = await d.connect()
+  try {
+    await client.query('BEGIN')
 
-  db = new Database(DB_PATH)
-  db.pragma('journal_mode = DELETE')
+    const stmt = `
+      INSERT INTO members (student_id, full_name, date_joined, expiry_date, level, gender, faculty, source_spreadsheet, updated_at)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
+      ON CONFLICT (student_id, source_spreadsheet) DO UPDATE SET
+        full_name = CASE WHEN excluded.full_name != '' THEN excluded.full_name ELSE members.full_name END,
+        date_joined = CASE WHEN excluded.date_joined != '' THEN excluded.date_joined ELSE members.date_joined END,
+        expiry_date = CASE WHEN excluded.expiry_date != '' THEN excluded.expiry_date ELSE members.expiry_date END,
+        level = CASE WHEN excluded.level != '' THEN excluded.level ELSE members.level END,
+        gender = CASE WHEN excluded.gender != '' THEN excluded.gender ELSE members.gender END,
+        faculty = CASE WHEN excluded.faculty != '' THEN excluded.faculty ELSE members.faculty END,
+        updated_at = NOW()
+    `
 
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS members (
-      student_id TEXT NOT NULL,
-      full_name TEXT DEFAULT '',
-      date_joined TEXT DEFAULT '',
-      expiry_date TEXT DEFAULT '',
-      level TEXT DEFAULT '',
-      gender TEXT DEFAULT '',
-      faculty TEXT DEFAULT '',
-      source_spreadsheet TEXT DEFAULT '',
-      updated_at TEXT DEFAULT (datetime('now')),
-      PRIMARY KEY (student_id, source_spreadsheet)
-    );
-
-    CREATE INDEX IF NOT EXISTS idx_members_student_id ON members(student_id);
-  `)
-
-  return db
-}
-
-export function getMembersDb() {
-  if (!db) throw new Error('Members DB not initialized. Call initMembersDb() first.')
-  return db
-}
-
-export function upsertMembers(members, spreadsheetLabel) {
-  const d = getMembersDb()
-  const stmt = d.prepare(`
-    INSERT INTO members (student_id, full_name, date_joined, expiry_date, level, gender, faculty, source_spreadsheet, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
-    ON CONFLICT(student_id, source_spreadsheet) DO UPDATE SET
-      full_name = CASE WHEN excluded.full_name != '' THEN excluded.full_name ELSE members.full_name END,
-      date_joined = CASE WHEN excluded.date_joined != '' THEN excluded.date_joined ELSE members.date_joined END,
-      expiry_date = CASE WHEN excluded.expiry_date != '' THEN excluded.expiry_date ELSE members.expiry_date END,
-      level = CASE WHEN excluded.level != '' THEN excluded.level ELSE members.level END,
-      gender = CASE WHEN excluded.gender != '' THEN excluded.gender ELSE members.gender END,
-      faculty = CASE WHEN excluded.faculty != '' THEN excluded.faculty ELSE members.faculty END,
-      updated_at = datetime('now')
-  `)
-
-  const insertMany = d.transaction((rows) => {
-    for (const m of rows) {
-      stmt.run(
+    for (const m of members) {
+      await client.query(stmt, [
         m.studentId,
         m.fullName,
         m.dateJoined,
@@ -74,23 +47,31 @@ export function upsertMembers(members, spreadsheetLabel) {
         m.level,
         m.gender,
         m.faculty,
-        spreadsheetLabel
-      )
+        spreadsheetLabel,
+      ])
     }
-  })
 
-  insertMany(members)
+    await client.query('COMMIT')
+  } catch (err) {
+    await client.query('ROLLBACK')
+    throw err
+  } finally {
+    client.release()
+  }
+
   return members.length
 }
 
-export function findMember(studentId) {
-  const d = getMembersDb()
+export async function findMember(studentId) {
+  const d = getPool()
   const sid = studentId.trim()
 
-  const rows = d.prepare(`
-    SELECT * FROM members WHERE student_id = ?
-    ORDER BY date_joined DESC
-  `).all(sid)
+  const rows = (
+    await d.query(
+      `SELECT * FROM members WHERE student_id = $1 ORDER BY date_joined DESC NULLS LAST`,
+      [sid]
+    )
+  ).rows
 
   if (rows.length === 0) return null
 
@@ -115,9 +96,9 @@ export function findMember(studentId) {
   })
 }
 
-export function getAllMembersMap() {
-  const d = getMembersDb()
-  const rows = d.prepare('SELECT * FROM members').all()
+export async function getAllMembersMap() {
+  const d = getPool()
+  const rows = (await d.query('SELECT * FROM members')).rows
   const map = {}
 
   for (const row of rows) {
@@ -151,12 +132,11 @@ export function getAllMembersMap() {
   return map
 }
 
-export function clearAllMembers() {
-  const d = getMembersDb()
-  d.prepare('DELETE FROM members').run()
+export async function clearAllMembers() {
+  await getPool().query('DELETE FROM members')
 }
 
-export function getMemberCount() {
-  const d = getMembersDb()
-  return d.prepare('SELECT COUNT(DISTINCT student_id) as count FROM members').get().count
+export async function getMemberCount() {
+  const res = await getPool().query('SELECT COUNT(DISTINCT student_id)::int as count FROM members')
+  return res.rows[0].count
 }

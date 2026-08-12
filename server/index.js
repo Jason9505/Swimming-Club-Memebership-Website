@@ -4,11 +4,12 @@ import helmet from 'helmet'
 import morgan from 'morgan'
 import rateLimit from 'express-rate-limit'
 import session from 'express-session'
+import connectPgSimple from 'connect-pg-simple'
 import cookieParser from 'cookie-parser'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import dotenv from 'dotenv'
-import { initMembersDb, initAttendanceDb, initCommitteeDb } from './database.js'
+import { initDb, getPool } from './database.js'
 import { syncFromSheets } from './sync.js'
 import attendanceRouter from './routes/attendance.js'
 import memberRouter from './routes/member.js'
@@ -30,10 +31,12 @@ app.use(morgan('combined'))
 app.use(express.json())
 app.use(cookieParser())
 
+const PgSessionStore = connectPgSimple(session)
 app.use(session({
   secret: process.env.SESSION_SECRET || 'fallback-secret-change-me',
   resave: false,
   saveUninitialized: false,
+  store: new PgSessionStore({ pool: getPool(), tableName: 'session', createTableIfMissing: true }),
   cookie: {
     httpOnly: true,
     sameSite: 'lax',
@@ -53,22 +56,42 @@ app.use(rateLimit({
 
 app.get('/ping', (req, res) => res.json({ ok: true }))
 
-app.use(express.static(path.join(__dirname, '..', 'client', 'dist')))
+app.use(express.static(path.join(__dirname, 'public')))
 
 app.use('/api', attendanceRouter)
 app.use('/api', memberRouter)
 app.use('/api', adminRouter)
 
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, '..', 'client', 'dist', 'index.html'))
+app.get('/api/sync', async (req, res) => {
+  const cronSecret = process.env.CRON_SECRET
+  const isAuthorized = req.session?.isAdmin ||
+    (cronSecret && req.headers.authorization === `Bearer ${cronSecret}`)
+  if (!isAuthorized) {
+    return res.status(401).json({ error: 'Unauthorized' })
+  }
+  try {
+    const result = await syncFromSheets()
+    res.json(result)
+  } catch (err) {
+    console.error('[Sync] Manual/cron sync failed:', err.message)
+    res.status(500).json({ error: err.message })
+  }
 })
 
-initMembersDb()
-initAttendanceDb()
-initCommitteeDb()
-console.log('[DB] SQLite databases initialized (members + attendance + committee)')
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'))
+})
 
 async function startServer() {
+  try {
+    await initDb()
+    console.log('[DB] Postgres database initialized (members + committee + attendance + session)')
+  } catch (err) {
+    console.error('[DB] Database init failed:', err.message)
+    console.error('[DB] Check that DATABASE_URL is set and reachable.')
+    process.exit(1)
+  }
+
   try {
     await syncFromSheets()
   } catch (err) {
@@ -78,14 +101,6 @@ async function startServer() {
   app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`)
   })
-
-  setInterval(async () => {
-    try {
-      await syncFromSheets()
-    } catch (err) {
-      console.error('[Sync] Periodic sync failed:', err.message)
-    }
-  }, 30 * 60 * 1000)
 }
 
 startServer()

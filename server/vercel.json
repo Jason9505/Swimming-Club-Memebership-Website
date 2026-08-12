@@ -1,0 +1,13 @@
+{
+  "functions": {
+    "index.js": {
+      "includeFiles": "public/**"
+    }
+  },
+  "crons": [
+    {
+      "path": "/api/sync",
+      "schedule": "0 0 * * *"
+    }
+  ]
+}

@@ -1,3 +1,5 @@
+export { initDb, getPool } from './db/index.js'
+
 export {
   initMembersDb,
   getMembersDb,

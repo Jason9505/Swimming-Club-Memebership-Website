@@ -1,105 +1,81 @@
-import Database from 'better-sqlite3'
-import path from 'path'
-import { fileURLToPath } from 'url'
-import { getMembersDb } from './members.js'
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const DB_PATH = path.resolve(__dirname, '..', 'attendance.db')
-
-let db = null
+import { getPool, initDb } from './index.js'
 
 export function initAttendanceDb() {
-  if (db) return db
-
-  db = new Database(DB_PATH)
-  db.pragma('journal_mode = DELETE')
-
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS attendance (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      timestamp TEXT NOT NULL,
-      student_id TEXT NOT NULL,
-      full_name TEXT DEFAULT '',
-      faculty TEXT DEFAULT '',
-      membership_status TEXT DEFAULT ''
-    );
-
-    CREATE INDEX IF NOT EXISTS idx_attendance_student_id ON attendance(student_id);
-    CREATE INDEX IF NOT EXISTS idx_attendance_timestamp ON attendance(timestamp);
-  `)
-
-  return db
+  return initDb()
 }
 
 export function getAttendanceDb() {
-  if (!db) throw new Error('Attendance DB not initialized. Call initAttendanceDb() first.')
-  return db
+  return getPool()
 }
 
-export function getAttendanceForStudentToday(studentId) {
-  const d = getAttendanceDb()
+export async function getAttendanceForStudentToday(studentId) {
+  const d = getPool()
   const today = new Date().toISOString().slice(0, 10)
-  const row = d.prepare(`
-    SELECT id FROM attendance
-    WHERE student_id = ? AND substr(timestamp, 1, 10) = ?
-    LIMIT 1
-  `).get(studentId.trim(), today)
-  return !!row
+  const res = await d.query(
+    `SELECT id FROM attendance
+     WHERE student_id = $1 AND LEFT("timestamp", 10) = $2
+     LIMIT 1`,
+    [studentId.trim(), today]
+  )
+  return res.rows.length > 0
 }
 
-export function insertAttendance(record) {
-  const d = getAttendanceDb()
-  d.prepare(`
-    INSERT INTO attendance (timestamp, student_id, full_name, faculty, membership_status)
-    VALUES (?, ?, ?, ?, ?)
-  `).run(
-    record.timestamp,
-    record.studentId,
-    record.fullName,
-    record.faculty || '',
-    record.membershipStatus
+export async function insertAttendance(record) {
+  const d = getPool()
+  await d.query(
+    `INSERT INTO attendance ("timestamp", student_id, full_name, faculty, membership_status)
+     VALUES ($1, $2, $3, $4, $5)`,
+    [
+      record.timestamp,
+      record.studentId,
+      record.fullName,
+      record.faculty || '',
+      record.membershipStatus,
+    ]
   )
 }
 
-export function getAttendanceRows(filters = {}) {
-  const d = getAttendanceDb()
+export async function getAttendanceRows(filters = {}) {
+  const d = getPool()
   let query = 'SELECT * FROM attendance WHERE 1=1'
   const params = []
+  let idx = 1
 
   if (filters.studentId) {
-    query += ' AND student_id LIKE ?'
+    query += ` AND student_id LIKE $${idx++}`
     params.push(`%${filters.studentId}%`)
   }
   if (filters.faculty) {
-    query += ' AND faculty LIKE ?'
+    query += ` AND faculty LIKE $${idx++}`
     params.push(`%${filters.faculty}%`)
   }
   if (filters.membershipStatus) {
-    query += ' AND membership_status = ?'
+    query += ` AND membership_status = $${idx++}`
     params.push(filters.membershipStatus)
   }
   if (filters.startDate) {
-    query += ' AND timestamp >= ?'
+    query += ` AND "timestamp" >= $${idx++}`
     params.push(filters.startDate)
   }
   if (filters.endDate) {
-    query += ' AND timestamp <= ?'
+    query += ` AND "timestamp" <= $${idx++}`
     params.push(filters.endDate + 'T23:59:59')
   }
 
-  query += ' ORDER BY timestamp DESC'
+  query += ' ORDER BY "timestamp" DESC'
 
-  return d.prepare(query).all(...params)
+  return (await d.query(query, params)).rows
 }
 
-export function getAttendanceSummary() {
-  const d = getAttendanceDb()
-  const membersDb = getMembersDb()
+export async function getAttendanceSummary() {
+  const d = getPool()
 
-  const totalRow = d.prepare('SELECT COUNT(*) as count FROM attendance').get()
+  const totalRow = (
+    await d.query('SELECT COUNT(*)::int as count FROM attendance')
+  ).rows[0]
   const totalAttendance = totalRow.count
 
-  const memberRows = membersDb.prepare('SELECT * FROM members').all()
+  const memberRows = (await d.query('SELECT * FROM members')).rows
   const membersMap = {}
   for (const row of memberRows) {
     const sid = row.student_id
@@ -115,7 +91,7 @@ export function getAttendanceSummary() {
   const activeSet = new Set()
   const expiredSet = new Set()
 
-  const attRows = d.prepare('SELECT DISTINCT student_id FROM attendance').all()
+  const attRows = (await d.query('SELECT DISTINCT student_id FROM attendance')).rows
   for (const row of attRows) {
     const sid = row.student_id
     const member = membersMap[sid]

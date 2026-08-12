@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import { findMember, findCommitteeMember } from '../database.js'
 import { parseDate } from '../services/googleSheets.js'
+import { maybeSync } from '../sync.js'
 
 const router = Router()
 
@@ -8,7 +9,9 @@ router.get('/member/:studentId', async (req, res) => {
   try {
     const { studentId } = req.params
 
-    const committeeMember = findCommitteeMember(studentId)
+    await maybeSync()
+
+    const committeeMember = await findCommitteeMember(studentId)
     if (committeeMember) {
       return res.json({
         studentId: committeeMember.studentId,
@@ -21,7 +24,7 @@ router.get('/member/:studentId', async (req, res) => {
       })
     }
 
-    const member = findMember(studentId)
+    const member = await findMember(studentId)
     if (!member) {
       return res.status(404).json({ error: 'Student ID Not Found' })
     }
