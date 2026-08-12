@@ -88,8 +88,6 @@ async function startServer() {
     console.log('[DB] Postgres database initialized (members + committee + attendance + session)')
   } catch (err) {
     console.error('[DB] Database init failed:', err.message)
-    console.error('[DB] Check that DATABASE_URL is set and reachable.')
-    process.exit(1)
   }
 
   try {
@@ -98,9 +96,13 @@ async function startServer() {
     console.error('[Sync] Initial sync failed:', err.message)
   }
 
-  app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`)
-  })
+  if (!process.env.VERCEL) {
+    app.listen(PORT, () => {
+      console.log(`Server running on port ${PORT}`)
+    })
+  }
 }
+
+export default app
 
 startServer()
