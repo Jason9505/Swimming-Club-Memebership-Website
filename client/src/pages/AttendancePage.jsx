@@ -51,15 +51,9 @@ export default function AttendancePage() {
           className="h-28 mx-auto mb-8 object-contain"
         />
 
-        <h1 className="text-2xl font-light text-gray-300 mb-2">
+        <h1 className="text-2xl font-light text-gray-300 mb-8">
           Enter Student ID
         </h1>
-        <p className="text-sm text-gray-500 mb-2">
-          Record your attendance for today
-        </p>
-        <p className="text-xs text-gray-600 mb-8">
-          Admins: enter the admin password to open the dashboard
-        </p>
 
         <SessionBars session={session} />
 
