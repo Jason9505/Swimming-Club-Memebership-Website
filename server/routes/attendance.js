@@ -20,26 +20,14 @@ router.post('/attendance', async (req, res) => {
       return res.status(400).json({ error: 'Student ID is required.' })
     }
 
-    await maybeSync()
+    maybeSync()
 
     const now = new Date()
     const { mode } = await getAttendanceMode()
     const inSession = mode === 'on' ? true : isSessionTime(now)
-    const alreadyRecorded = inSession && await getAttendanceForStudentToday(studentId)
-    const attendanceRecorded = inSession && !alreadyRecorded
 
     const committeeMember = await findCommitteeMember(studentId)
     if (committeeMember) {
-      if (attendanceRecorded) {
-        await insertAttendance({
-          timestamp: now.toISOString(),
-          studentId: committeeMember.studentId,
-          fullName: committeeMember.fullName,
-          faculty: '',
-          membershipStatus: 'Committee',
-        })
-      }
-
       return res.json({
         studentId: committeeMember.studentId,
         fullName: committeeMember.fullName,
@@ -49,7 +37,7 @@ router.post('/attendance', async (req, res) => {
         membershipStatus: 'Committee',
         isSessionTime: inSession,
         mode: inSession ? 'attendance' : 'membership-check',
-        attendanceRecorded,
+        attendanceRecorded: false,
         showDigitalCard: true,
       })
     }
@@ -58,6 +46,9 @@ router.post('/attendance', async (req, res) => {
     if (!member) {
       return res.status(404).json({ error: 'Student ID Not Found' })
     }
+
+    const alreadyRecorded = inSession && await getAttendanceForStudentToday(studentId)
+    const attendanceRecorded = inSession && !alreadyRecorded
 
     const expiry = parseDate(member.expiryDate)
     const membershipStatus = expiry && now > expiry ? 'Expired' : 'Active'

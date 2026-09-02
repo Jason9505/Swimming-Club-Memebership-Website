@@ -9,7 +9,7 @@ router.get('/member/:studentId', async (req, res) => {
   try {
     const { studentId } = req.params
 
-    await maybeSync()
+    maybeSync()
 
     const committeeMember = await findCommitteeMember(studentId)
     if (committeeMember) {

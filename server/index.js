@@ -121,11 +121,9 @@ async function startServer() {
     console.error('[DB] Database init failed:', err.message)
   }
 
-  try {
-    await syncFromSheets()
-  } catch (err) {
+  syncFromSheets().catch((err) => {
     console.error('[Sync] Initial sync failed:', err.message)
-  }
+  })
 
   if (!process.env.VERCEL) {
     app.listen(PORT, () => {
