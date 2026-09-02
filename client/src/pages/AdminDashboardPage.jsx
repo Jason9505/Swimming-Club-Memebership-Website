@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { logout, checkAuth, getAttendance, getSummary, getSyncStatus, triggerSync } from '../api/admin'
+import { logout, checkAuth, getAttendance, getSummary, getSyncStatus, triggerSync, getAttendanceMode, setAttendanceMode } from '../api/admin'
 
 export default function AdminDashboardPage() {
   const navigate = useNavigate()
@@ -15,6 +15,10 @@ export default function AdminDashboardPage() {
   const [syncStatus, setSyncStatus] = useState(null)
   const [syncing, setSyncing] = useState(false)
   const [syncError, setSyncError] = useState('')
+
+  const [modeStatus, setModeStatus] = useState({ mode: 'auto', updatedAt: null })
+  const [modeUpdating, setModeUpdating] = useState(false)
+  const [modeError, setModeError] = useState('')
 
   const [filters, setFilters] = useState({
     startDate: '',
@@ -58,10 +62,20 @@ export default function AdminDashboardPage() {
     }
   }, [])
 
+  const fetchModeStatus = useCallback(async () => {
+    try {
+      setModeStatus(await getAttendanceMode())
+      setModeError('')
+    } catch {
+      setModeError('Failed to load attendance mode')
+    }
+  }, [])
+
   useEffect(() => {
     if (authenticated) {
       fetchData(filters)
       fetchSyncStatus()
+      fetchModeStatus()
     }
   }, [authenticated])
 
@@ -79,6 +93,19 @@ export default function AdminDashboardPage() {
       setSyncError(err.message)
     } finally {
       setSyncing(false)
+    }
+  }
+
+  async function handleToggleMode() {
+    const next = modeStatus.mode === 'on' ? 'auto' : 'on'
+    setModeUpdating(true)
+    setModeError('')
+    try {
+      setModeStatus(await setAttendanceMode(next))
+    } catch (err) {
+      setModeError(err.message)
+    } finally {
+      setModeUpdating(false)
     }
   }
 
@@ -342,6 +369,65 @@ export default function AdminDashboardPage() {
           {syncError && (
             <div className="mt-4 p-3 rounded-lg bg-red-900/30 border border-red-800/50">
               <p className="text-red-300 text-xs font-medium">{syncError}</p>
+            </div>
+          )}
+        </div>
+
+        <div className="rounded-xl bg-metallic-800 border border-gray-600/50 p-5 mb-6 print:hidden">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <h2 className="text-sm font-semibold text-gray-200">Attendance Mode</h2>
+              {modeStatus.mode === 'on' ? (
+                <span className="inline-block text-xs font-semibold px-2.5 py-1 rounded-full uppercase tracking-wider bg-gold/20 text-goldLight border border-gold">
+                  Attendance open
+                </span>
+              ) : (
+                <span className="inline-block text-xs font-semibold px-2.5 py-1 rounded-full uppercase tracking-wider bg-metallic-900 text-gray-400 border border-gray-600/50">
+                  Auto
+                </span>
+              )}
+            </div>
+            <button
+              onClick={handleToggleMode}
+              disabled={modeUpdating}
+              className={`px-5 py-2 rounded-lg text-sm font-semibold transition-all flex items-center gap-2 ${
+                modeUpdating
+                  ? 'bg-metallic-700 text-gray-500 cursor-not-allowed'
+                  : modeStatus.mode === 'on'
+                    ? 'bg-metallic-700 border border-gray-600/50 text-gray-300 hover:bg-metallic-600'
+                    : 'bg-gradient-to-r from-gold to-goldLight text-gray-900 border border-gold shadow-lg hover:opacity-90'
+              }`}
+            >
+              {modeUpdating && (
+                <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+              )}
+              {modeStatus.mode === 'on' ? 'Set to None' : 'Enable Attendance Mode'}
+            </button>
+          </div>
+
+          <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="rounded-lg bg-metallic-900 border border-gray-700/50 p-4">
+              <div className="text-[10px] uppercase tracking-widest text-gray-500 mb-1">Current Behavior</div>
+              <div className="text-sm font-medium text-gray-200">
+                {modeStatus.mode === 'on'
+                  ? 'Attendance is recorded for every lookup, regardless of session time.'
+                  : 'Attendance follows the regular session schedule (Tue & Wed).'}
+              </div>
+            </div>
+            <div className="rounded-lg bg-metallic-900 border border-gray-700/50 p-4">
+              <div className="text-[10px] uppercase tracking-widest text-gray-500 mb-1">Last Changed</div>
+              <div className="text-sm font-medium text-gray-200">
+                {modeStatus.updatedAt ? formatTimestamp(modeStatus.updatedAt) : 'Never'}
+              </div>
+            </div>
+          </div>
+
+          {modeError && (
+            <div className="mt-4 p-3 rounded-lg bg-red-900/30 border border-red-800/50">
+              <p className="text-red-300 text-xs font-medium">{modeError}</p>
             </div>
           )}
         </div>

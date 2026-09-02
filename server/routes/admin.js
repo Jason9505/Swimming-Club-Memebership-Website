@@ -5,6 +5,8 @@ import {
   getAttendanceSummary,
   getAllMembersMap,
   getAllCommitteeMap,
+  getAttendanceMode,
+  setAttendanceMode,
 } from '../database.js'
 import { parseDate } from '../services/googleSheets.js'
 import { getSyncStatus, forceSync } from '../sync.js'
@@ -105,6 +107,28 @@ router.get('/admin/summary', requireAdmin, async (req, res) => {
     res.json(summary)
   } catch (err) {
     console.error('Admin summary error:', err)
+    res.status(500).json({ error: 'Server error.' })
+  }
+})
+
+router.get('/admin/mode', requireAdmin, async (req, res) => {
+  try {
+    res.json(await getAttendanceMode())
+  } catch (err) {
+    console.error('Admin mode status error:', err)
+    res.status(500).json({ error: 'Server error.' })
+  }
+})
+
+router.post('/admin/mode', requireAdmin, async (req, res) => {
+  const { mode } = req.body || {}
+  if (mode !== 'auto' && mode !== 'on') {
+    return res.status(400).json({ error: 'Mode must be "auto" or "on"' })
+  }
+  try {
+    res.json(await setAttendanceMode(mode))
+  } catch (err) {
+    console.error('Admin mode set error:', err)
     res.status(500).json({ error: 'Server error.' })
   }
 })

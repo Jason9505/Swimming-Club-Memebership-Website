@@ -28,3 +28,10 @@ export {
   clearAllCommittee,
   getCommitteeCount,
 } from './db/committee.js'
+
+export {
+  initAttendanceModeDb,
+  getAttendanceModeDb,
+  getAttendanceMode,
+  setAttendanceMode,
+} from './db/attendanceMode.js'

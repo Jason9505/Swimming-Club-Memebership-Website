@@ -77,6 +77,16 @@ export async function initDb() {
     VALUES (1, NULL, FALSE)
     ON CONFLICT (id) DO NOTHING;
 
+    CREATE TABLE IF NOT EXISTS attendance_mode (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      mode TEXT NOT NULL DEFAULT 'auto',
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
+
+    INSERT INTO attendance_mode (id, mode)
+    VALUES (1, 'auto')
+    ON CONFLICT (id) DO NOTHING;
+
     CREATE TABLE IF NOT EXISTS "session" (
       "sid" varchar NOT NULL COLLATE "default",
       "sess" json NOT NULL,

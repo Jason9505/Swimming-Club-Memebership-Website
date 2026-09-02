@@ -64,3 +64,21 @@ export async function triggerSync() {
   }
   return data
 }
+
+export async function getAttendanceMode() {
+  const res = await fetch(`${API_BASE}/admin/mode`, { credentials: 'include' })
+  if (!res.ok) throw new Error('Failed to fetch attendance mode')
+  return res.json()
+}
+
+export async function setAttendanceMode(mode) {
+  const res = await fetch(`${API_BASE}/admin/mode`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ mode }),
+  })
+  const data = await res.json()
+  if (!res.ok) throw new Error(data.error || 'Failed to update attendance mode')
+  return data
+}

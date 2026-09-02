@@ -1,13 +1,16 @@
 import { Router } from 'express'
-import { findMember, findCommitteeMember, getAttendanceForStudentToday, insertAttendance } from '../database.js'
+import { findMember, findCommitteeMember, getAttendanceForStudentToday, insertAttendance, getAttendanceMode } from '../database.js'
 import { parseDate } from '../services/googleSheets.js'
 import { isSessionTime, getSessionInfo } from '../services/session.js'
 import { maybeSync } from '../sync.js'
 
 const router = Router()
 
-router.get('/session', (req, res) => {
-  res.json(getSessionInfo())
+router.get('/session', async (req, res) => {
+  const info = getSessionInfo()
+  const { mode, updatedAt } = await getAttendanceMode()
+  const active = mode === 'on' ? true : info.active
+  res.json({ ...info, mode, active, overrideUpdatedAt: updatedAt })
 })
 
 router.post('/attendance', async (req, res) => {
@@ -20,7 +23,8 @@ router.post('/attendance', async (req, res) => {
     await maybeSync()
 
     const now = new Date()
-    const inSession = isSessionTime(now)
+    const { mode } = await getAttendanceMode()
+    const inSession = mode === 'on' ? true : isSessionTime(now)
     const alreadyRecorded = inSession && await getAttendanceForStudentToday(studentId)
     const attendanceRecorded = inSession && !alreadyRecorded
 
