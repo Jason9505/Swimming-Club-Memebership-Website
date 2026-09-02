@@ -75,7 +75,14 @@ app.use(rateLimit({
 
 app.get('/ping', (req, res) => res.json({ ok: true }))
 
-app.use(express.static(path.join(__dirname, 'public')))
+app.use(express.static(path.join(__dirname, 'public'), {
+  index: false,
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith('index.html')) {
+      res.setHeader('Cache-Control', 'no-store')
+    }
+  },
+}))
 
 app.use('/api', attendanceRouter)
 app.use('/api', memberRouter)
@@ -98,7 +105,12 @@ app.get('/api/sync', async (req, res) => {
 })
 
 app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'))
+  if (/\.(?:js|mjs|css|map|json|png|jpe?g|gif|svg|webp|ico|woff2?|ttf|eot)$/i.test(req.path)) {
+    return res.status(404).type('text/plain').send('Not Found')
+  }
+  res.sendFile(path.join(__dirname, 'public', 'index.html'), {
+    headers: { 'Cache-Control': 'no-store' },
+  })
 })
 
 async function startServer() {
