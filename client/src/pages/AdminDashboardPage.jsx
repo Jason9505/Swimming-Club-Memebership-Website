@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { logout, checkAuth, getAttendance, getSummary } from '../api/admin'
+import { logout, checkAuth, getAttendance, getSummary, getSyncStatus, triggerSync } from '../api/admin'
 
 export default function AdminDashboardPage() {
   const navigate = useNavigate()
@@ -11,6 +11,10 @@ export default function AdminDashboardPage() {
   const [summary, setSummary] = useState({ totalAttendance: 0, activeMembers: 0, expiredMembers: 0 })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+
+  const [syncStatus, setSyncStatus] = useState(null)
+  const [syncing, setSyncing] = useState(false)
+  const [syncError, setSyncError] = useState('')
 
   const [filters, setFilters] = useState({
     startDate: '',
@@ -46,11 +50,37 @@ export default function AdminDashboardPage() {
     }
   }, [])
 
+  const fetchSyncStatus = useCallback(async () => {
+    try {
+      setSyncStatus(await getSyncStatus())
+    } catch {
+      setSyncStatus(null)
+    }
+  }, [])
+
   useEffect(() => {
     if (authenticated) {
       fetchData(filters)
+      fetchSyncStatus()
     }
   }, [authenticated])
+
+  async function handleSyncNow() {
+    setSyncing(true)
+    setSyncError('')
+    try {
+      const data = await triggerSync()
+      setSyncStatus(data)
+      fetchData(filters)
+    } catch (err) {
+      if (err.status === 409) {
+        fetchSyncStatus()
+      }
+      setSyncError(err.message)
+    } finally {
+      setSyncing(false)
+    }
+  }
 
   async function handleLogout() {
     await logout()
@@ -209,6 +239,111 @@ export default function AdminDashboardPage() {
             <div className="text-xs uppercase tracking-widest text-gray-500 mb-1">Expired Members</div>
             <div className="text-3xl font-bold text-red-400">{summary.expiredMembers}</div>
           </div>
+        </div>
+
+        <div className="rounded-xl bg-metallic-800 border border-gray-600/50 p-5 mb-6 print:hidden">
+          <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
+            <div className="flex items-center gap-3">
+              <h2 className="text-sm font-semibold text-gray-200">Sync Status</h2>
+              {(() => {
+                const isSyncingNow = syncing || syncStatus?.syncing
+                const failed = syncStatus?.lastResult && syncStatus.lastResult.success === false
+                if (isSyncingNow) {
+                  return (
+                    <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full uppercase tracking-wider bg-yellow-900/60 text-yellow-300 border border-yellow-700">
+                      <svg className="animate-spin h-3.5 w-3.5" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                      </svg>
+                      Syncing now…
+                    </span>
+                  )
+                }
+                if (failed) {
+                  return (
+                    <span className="inline-block text-xs font-semibold px-2.5 py-1 rounded-full uppercase tracking-wider bg-red-900/60 text-red-300 border border-red-700">
+                      Needs attention
+                    </span>
+                  )
+                }
+                return (
+                  <span className="inline-block text-xs font-semibold px-2.5 py-1 rounded-full uppercase tracking-wider bg-emerald-900/60 text-emerald-300 border border-emerald-700">
+                    In sync
+                  </span>
+                )
+              })()}
+            </div>
+            <button
+              onClick={handleSyncNow}
+              disabled={syncing || syncStatus?.syncing}
+              className={`px-5 py-2 rounded-lg text-sm font-semibold transition-all flex items-center gap-2 ${
+                syncing || syncStatus?.syncing
+                  ? 'bg-metallic-700 text-gray-500 cursor-not-allowed'
+                  : 'bg-gradient-to-r from-gray-600 to-gray-500 text-gray-100 border border-gray-500/50 shadow-lg hover:from-gray-500 hover:to-gray-400'
+              }`}
+            >
+              {syncing && (
+                <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+              )}
+              {syncing ? 'Syncing…' : 'Sync Now'}
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="rounded-lg bg-metallic-900 border border-gray-700/50 p-4">
+              <div className="text-[10px] uppercase tracking-widest text-gray-500 mb-1">Last Synced</div>
+              <div className="text-sm font-medium text-gray-200">
+                {syncStatus?.lastSyncAt ? formatTimestamp(syncStatus.lastSyncAt) : 'Never'}
+              </div>
+            </div>
+            <div className="rounded-lg bg-metallic-900 border border-gray-700/50 p-4">
+              <div className="text-[10px] uppercase tracking-widest text-gray-500 mb-1">Members</div>
+              <div className="text-2xl font-bold text-gray-100">
+                {syncStatus ? syncStatus.memberCount : '\u2014'}
+              </div>
+            </div>
+            <div className="rounded-lg bg-metallic-900 border border-gray-700/50 p-4">
+              <div className="text-[10px] uppercase tracking-widest text-gray-500 mb-1">Committee</div>
+              <div className="text-2xl font-bold text-gold">
+                {syncStatus ? syncStatus.committeeCount : '\u2014'}
+              </div>
+            </div>
+          </div>
+
+          {(() => {
+            const lr = syncStatus?.lastResult
+            if (!lr) {
+              return (
+                <p className="mt-4 text-xs text-gray-500">No sync has run yet.</p>
+              )
+            }
+            return (
+              <div className="mt-4 text-xs text-gray-400">
+                <p>
+                  {lr.sheetsSynced} sheet{lr.sheetsSynced !== 1 ? 's' : ''} OK, {lr.sheetsFailed} failed · took {lr.elapsed}
+                  {lr.success ? '' : ' — check the sync logs.'}
+                </p>
+                {Array.isArray(lr.errors) && lr.errors.length > 0 && (
+                  <ul className="mt-2 space-y-1">
+                    {lr.errors.map((e, i) => (
+                      <li key={i} className="text-red-300">
+                        <span className="font-medium">{e.label}:</span> {e.error}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )
+          })()}
+
+          {syncError && (
+            <div className="mt-4 p-3 rounded-lg bg-red-900/30 border border-red-800/50">
+              <p className="text-red-300 text-xs font-medium">{syncError}</p>
+            </div>
+          )}
         </div>
 
         <form

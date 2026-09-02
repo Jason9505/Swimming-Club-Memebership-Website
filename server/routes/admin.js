@@ -7,6 +7,7 @@ import {
   getAllCommitteeMap,
 } from '../database.js'
 import { parseDate } from '../services/googleSheets.js'
+import { getSyncStatus, forceSync } from '../sync.js'
 
 const router = Router()
 
@@ -104,6 +105,28 @@ router.get('/admin/summary', requireAdmin, async (req, res) => {
     res.json(summary)
   } catch (err) {
     console.error('Admin summary error:', err)
+    res.status(500).json({ error: 'Server error.' })
+  }
+})
+
+router.get('/admin/sync', requireAdmin, async (req, res) => {
+  try {
+    res.json(await getSyncStatus())
+  } catch (err) {
+    console.error('Admin sync status error:', err)
+    res.status(500).json({ error: 'Server error.' })
+  }
+})
+
+router.post('/admin/sync', requireAdmin, async (req, res) => {
+  try {
+    const result = await forceSync()
+    if (result.success === false && result.message) {
+      return res.status(409).json(result)
+    }
+    res.json({ ...result, ...(await getSyncStatus()) })
+  } catch (err) {
+    console.error('Admin sync trigger error:', err)
     res.status(500).json({ error: 'Server error.' })
   }
 })

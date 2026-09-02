@@ -44,3 +44,23 @@ export async function getSummary() {
   if (!res.ok) throw new Error('Failed to fetch summary')
   return res.json()
 }
+
+export async function getSyncStatus() {
+  const res = await fetch(`${API_BASE}/admin/sync`, { credentials: 'include' })
+  if (!res.ok) throw new Error('Failed to fetch sync status')
+  return res.json()
+}
+
+export async function triggerSync() {
+  const res = await fetch(`${API_BASE}/admin/sync`, {
+    method: 'POST',
+    credentials: 'include',
+  })
+  const data = await res.json()
+  if (!res.ok) {
+    const err = new Error(data.error || data.message || 'Sync failed')
+    err.status = res.status
+    throw err
+  }
+  return data
+}

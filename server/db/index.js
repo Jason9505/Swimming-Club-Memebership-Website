@@ -71,6 +71,8 @@ export async function initDb() {
       syncing_at TIMESTAMPTZ
     );
 
+    ALTER TABLE sync_state ADD COLUMN IF NOT EXISTS last_result JSONB;
+
     INSERT INTO sync_state (id, last_sync_at, syncing)
     VALUES (1, NULL, FALSE)
     ON CONFLICT (id) DO NOTHING;
