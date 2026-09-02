@@ -4,7 +4,19 @@ const LEVEL_COLORS = {
   Advanced: 'bg-advanced',
 }
 
-export default function MembershipCard({ member }) {
+const MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+function formatDate(dateStr) {
+    if (!dateStr) return '—'
+    if (/^\d{1,2} \w{3} \d{4}$/.test(dateStr)) return dateStr
+    const d = new Date(dateStr)
+    if (!isNaN(d)) {
+      return `${d.getDate()} ${MONTH_ABBR[d.getMonth()]} ${d.getFullYear()}`
+    }
+    return dateStr
+  }
+
+  export default function MembershipCard({ member }) {
   const {
     studentId,
     fullName,
@@ -19,16 +31,6 @@ export default function MembershipCard({ member }) {
 
   const expired = membershipStatus === 'Expired'
   const levelColor = LEVEL_COLORS[swimmingLevel] || 'bg-gray-500'
-
-  function formatDate(dateStr) {
-    if (!dateStr) return '—'
-    if (/^\d{2} \w{3} \d{4}$/.test(dateStr)) return dateStr
-    const d = new Date(dateStr)
-    if (!isNaN(d)) {
-      return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
-    }
-    return dateStr
-  }
 
   return (
     <div className="flex flex-col gap-1.5 w-full max-w-sm mx-auto">

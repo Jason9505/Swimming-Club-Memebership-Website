@@ -1,5 +1,5 @@
 import { getPool, initDb } from './index.js'
-import { parseDate } from '../services/googleSheets.js'
+import { parseDate, formatDisplayDate } from '../services/googleSheets.js'
 
 export function initMembersDb() {
   return initDb()
@@ -15,7 +15,7 @@ function computeExpiryIfMissing(member) {
   if (!joined) return member
   const expiry = new Date(joined)
   expiry.setFullYear(expiry.getFullYear() + 1)
-  member.expiryDate = expiry.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+  member.expiryDate = formatDisplayDate(expiry)
   return member
 }
 

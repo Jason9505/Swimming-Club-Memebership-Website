@@ -114,8 +114,8 @@ function parseDate(dateStr) {
 
   const ddmmyyyyTime = str.match(/^(\d{1,2})[\/.](\d{1,2})[\/.](\d{4})[,\s]+\d{1,2}:\d{2}/)
   if (ddmmyyyyTime) {
-    let day = parseInt(ddmmyyyyTime[1])
-    let month = parseInt(ddmmyyyyTime[2])
+    let month = parseInt(ddmmyyyyTime[1])
+    let day = parseInt(ddmmyyyyTime[2])
     const year = parseInt(ddmmyyyyTime[3])
     if (month > 12) { const tmp = day; day = month; month = tmp }
     return new Date(year, month - 1, day)
@@ -123,8 +123,8 @@ function parseDate(dateStr) {
 
   const ddmmyyyy = str.match(/^(\d{1,2})[\/.](\d{1,2})[\/.](\d{4})$/)
   if (ddmmyyyy) {
-    let day = parseInt(ddmmyyyy[1])
-    let month = parseInt(ddmmyyyy[2])
+    let month = parseInt(ddmmyyyy[1])
+    let day = parseInt(ddmmyyyy[2])
     const year = parseInt(ddmmyyyy[3])
     if (month > 12) { const tmp = day; day = month; month = tmp }
     return new Date(year, month - 1, day)
@@ -154,6 +154,12 @@ function parseDate(dateStr) {
   return null
 }
 
+const MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+export function formatDisplayDate(date) {
+  return `${date.getDate()} ${MONTH_ABBR[date.getMonth()]} ${date.getFullYear()}`
+}
+
 function normalizeDate(dateStr) {
   if (!dateStr) return ''
   const str = dateStr.toString().trim()
@@ -161,12 +167,12 @@ function normalizeDate(dateStr) {
 
   const parsed = parseDate(str)
   if (parsed) {
-    return parsed.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+    return formatDisplayDate(parsed)
   }
 
   const d = new Date(str)
   if (!isNaN(d)) {
-    return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+    return formatDisplayDate(d)
   }
 
   return str

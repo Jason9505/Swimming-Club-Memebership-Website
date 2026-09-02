@@ -278,7 +278,7 @@ The page shows one pill per session day (Tue / Wed). When a session is open, its
 - Your digital membership card is displayed with:
    - Student ID and membership status badge (Active / Expired)
    - Full Name
-   - Member Since and Valid Thru dates (formatted as "DD MMM YYYY")
+   - Member Since and Valid Thru dates (formatted as "D MMM YYYY")
    - Swimming Level banner (color-coded: Blue = Beginner, Green = Intermediate, Red = Advanced)
    - A green "✓ Attendance recorded successfully" message
 - If expired, a red "Membership Expired" bar appears below the card
@@ -339,7 +339,7 @@ Navigate to `/admin` and log in with the configured admin password (`ADMIN_PASSW
 - **Auto-sync** — Member data syncs from Google Sheets on startup, on-demand (when data is stale), and via a daily cron.
 - **Multi-sheet support** — Searches across multiple spreadsheets and tabs. Students in multiple terms are matched by latest registration, with missing fields filled from older records.
 - **Duplicate handling** — Same Student ID cannot check in twice on the same day.
-- **Date normalization** — All dates normalized to "DD MMM YYYY" format on the server, fixing locale parsing issues.
+- **Date normalization** — All dates normalized to "D MMM YYYY" format on the server, fixing locale parsing issues. Sheet dates are read as month/day/year (e.g. `9/2/2026` → 2 Sep 2026).
 - **Auto-calculated expiry** — When a member's expiry date is missing from the sheet, it is automatically computed as `date_joined + 1 year`.
 - **Empty name warning** — If a member's name is missing from the records, the card shows "Name not available" with a prompt to contact the admin.
 - **Committee support** — Committee members are checked against the committee sheet **first** and get a gold card showing their position and status (Active / Probation), instead of a regular membership card.
