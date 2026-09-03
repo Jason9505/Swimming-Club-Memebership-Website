@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { submitAttendance } from '../api/attendance'
-import { login } from '../api/admin'
 
 export default function AttendancePage() {
   const [studentId, setStudentId] = useState('')
@@ -21,16 +20,7 @@ export default function AttendancePage() {
       const data = await submitAttendance(trimmed)
       navigate('/card', { state: { member: data } })
     } catch (err) {
-      if (err.status === 404) {
-        try {
-          await login(trimmed)
-          navigate('/admin')
-        } catch (loginErr) {
-          setError(loginErr.message || 'Student ID Not Found')
-        }
-      } else {
-        setError(err.message)
-      }
+      setError(err.message)
     } finally {
       setLoading(false)
     }
