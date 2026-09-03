@@ -93,6 +93,25 @@ export async function initDb() {
       "expire" timestamp(6) NOT NULL,
       CONSTRAINT "session_pkey" PRIMARY KEY ("sid")
     );
+
+    CREATE TABLE IF NOT EXISTS session_schedule (
+      id SERIAL PRIMARY KEY,
+      day_of_week INTEGER NOT NULL CHECK (day_of_week BETWEEN 0 AND 6),
+      start_time TEXT NOT NULL,
+      end_time TEXT NOT NULL,
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_session_schedule_day ON session_schedule(day_of_week);
+
+    CREATE TABLE IF NOT EXISTS session_settings (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      timezone TEXT NOT NULL DEFAULT 'Asia/Kuala_Lumpur'
+    );
+
+    INSERT INTO session_settings (id, timezone)
+    VALUES (1, 'Asia/Kuala_Lumpur')
+    ON CONFLICT (id) DO NOTHING;
   `)
 
   return d

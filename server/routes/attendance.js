@@ -7,7 +7,7 @@ import { maybeSync } from '../sync.js'
 const router = Router()
 
 router.get('/session', async (req, res) => {
-  const info = getSessionInfo()
+  const info = await getSessionInfo()
   const { mode, updatedAt } = await getAttendanceMode()
   const active = mode === 'on' ? true : info.active
   res.json({ ...info, mode, active, overrideUpdatedAt: updatedAt })
@@ -24,7 +24,7 @@ router.post('/attendance', async (req, res) => {
 
     const now = new Date()
     const { mode } = await getAttendanceMode()
-    const inSession = mode === 'on' ? true : isSessionTime(now)
+    const inSession = mode === 'on' ? true : await isSessionTime(now)
 
     const committeeMember = await findCommitteeMember(studentId)
     if (committeeMember) {

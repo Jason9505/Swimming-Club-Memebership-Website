@@ -1,31 +1,6 @@
-import { readFileSync, existsSync } from 'fs'
-import path from 'path'
-import { fileURLToPath } from 'url'
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url))
-
-const DEFAULTS = {
-  days: [2, 3],
-  start: '19:50',
-  end: '22:00',
-  timezone: 'Asia/Kuala_Lumpur',
-}
+import { getSessionSlots, getTimezone } from '../db/sessionSchedule.js'
 
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
-
-let cachedConfig = null
-
-export function loadSessionConfig() {
-  if (cachedConfig) return cachedConfig
-
-  const configPath = path.resolve(__dirname, '..', 'session-config.json')
-  let config = { ...DEFAULTS }
-  if (existsSync(configPath)) {
-    config = { ...config, ...JSON.parse(readFileSync(configPath, 'utf8')) }
-  }
-  cachedConfig = config
-  return config
-}
 
 function toMinutes(timeStr) {
   const [h, m] = (timeStr || '').split(':').map((n) => parseInt(n, 10))
@@ -33,14 +8,24 @@ function toMinutes(timeStr) {
   return h * 60 + m
 }
 
-export function isSessionTime(date = new Date()) {
-  const { days, start, end, timezone } = loadSessionConfig()
-  const startMin = toMinutes(start)
-  const endMin = toMinutes(end)
-  if (startMin === null || endMin === null) return false
+export async function loadSessionConfig() {
+  const [slots, timezone] = await Promise.all([getSessionSlots(), getTimezone()])
+  return { slots, timezone }
+}
 
+export async function isSessionTime(date = new Date()) {
+  const { slots, timezone } = await loadSessionConfig()
   const { day, minutes } = getLocalParts(date, timezone)
-  return days.includes(day) && minutes >= startMin && minutes < endMin
+
+  for (const slot of slots) {
+    const startMin = toMinutes(slot.start)
+    const endMin = toMinutes(slot.end)
+    if (startMin === null || endMin === null) continue
+    if (slot.dayOfWeek === day && minutes >= startMin && minutes < endMin) {
+      return true
+    }
+  }
+  return false
 }
 
 function getLocalParts(date, timezone) {
@@ -62,16 +47,16 @@ function getLocalParts(date, timezone) {
   return { day, minutes: hour * 60 + minute }
 }
 
-export function getSessionInfo(date = new Date()) {
-  const { days, start, end, timezone } = loadSessionConfig()
-  const active = isSessionTime(date)
+export async function getSessionInfo(date = new Date()) {
+  const { slots, timezone } = await loadSessionConfig()
+  const active = await isSessionTime(date)
+  const days = [...new Set(slots.map((s) => s.dayOfWeek))]
   return {
     active,
     activeDay: active ? getLocalParts(date, timezone).day : null,
     days,
     dayLabels: days.map((d) => DAY_NAMES[d]).join(' & '),
-    start,
-    end,
+    slots,
     timezone,
   }
 }
