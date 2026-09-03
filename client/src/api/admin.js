@@ -82,3 +82,31 @@ export async function setAttendanceMode(mode) {
   if (!res.ok) throw new Error(data.error || 'Failed to update attendance mode')
   return data
 }
+
+export async function getSessions() {
+  const res = await fetch(`${API_BASE}/admin/sessions`, { credentials: 'include' })
+  if (!res.ok) throw new Error('Failed to fetch sessions')
+  return res.json()
+}
+
+export async function addSession({ dayOfWeek, start, end }) {
+  const res = await fetch(`${API_BASE}/admin/sessions`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ dayOfWeek, start, end }),
+  })
+  const data = await res.json()
+  if (!res.ok) throw new Error(data.error || 'Failed to add session')
+  return data
+}
+
+export async function removeSession(id) {
+  const res = await fetch(`${API_BASE}/admin/sessions/${id}`, {
+    method: 'DELETE',
+    credentials: 'include',
+  })
+  const data = await res.json()
+  if (!res.ok) throw new Error(data.error || 'Failed to remove session')
+  return data
+}

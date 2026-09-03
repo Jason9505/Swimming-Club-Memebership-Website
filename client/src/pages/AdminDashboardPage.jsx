@@ -1,6 +1,8 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { login, logout, checkAuth, getAttendance, getSummary, getSyncStatus, triggerSync, getAttendanceMode, setAttendanceMode } from '../api/admin'
+import { login, logout, checkAuth, getAttendance, getSummary, getSyncStatus, triggerSync, getAttendanceMode, setAttendanceMode, getSessions, addSession, removeSession } from '../api/admin'
+
+const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 
 export default function AdminDashboardPage() {
   const navigate = useNavigate()
@@ -23,6 +25,16 @@ export default function AdminDashboardPage() {
   const [modeStatus, setModeStatus] = useState({ mode: 'auto', updatedAt: null })
   const [modeUpdating, setModeUpdating] = useState(false)
   const [modeError, setModeError] = useState('')
+
+  const [sessions, setSessions] = useState([])
+  const [sessionTimezone, setSessionTimezone] = useState('Asia/Kuala_Lumpur')
+  const [sessionsLoading, setSessionsLoading] = useState(true)
+  const [sessionError, setSessionError] = useState('')
+  const [sessionSaving, setSessionSaving] = useState(false)
+  const [removingSessionId, setRemovingSessionId] = useState(null)
+  const [newDay, setNewDay] = useState('2')
+  const [newStart, setNewStart] = useState('19:50')
+  const [newEnd, setNewEnd] = useState('22:00')
 
   const [filters, setFilters] = useState({
     startDate: '',
@@ -80,6 +92,7 @@ export default function AdminDashboardPage() {
       fetchData(filters)
       fetchSyncStatus()
       fetchModeStatus()
+      fetchSessions()
     }
   }, [authenticated])
 
@@ -127,6 +140,58 @@ export default function AdminDashboardPage() {
     } finally {
       setModeUpdating(false)
     }
+  }
+
+  const fetchSessions = useCallback(async () => {
+    setSessionsLoading(true)
+    setSessionError('')
+    try {
+      const data = await getSessions()
+      setSessions(data.slots || [])
+      setSessionTimezone(data.timezone || 'Asia/Kuala_Lumpur')
+    } catch (err) {
+      setSessionError(err.message)
+    } finally {
+      setSessionsLoading(false)
+    }
+  }, [])
+
+  async function handleAddSession(e) {
+    e.preventDefault()
+    setSessionSaving(true)
+    setSessionError('')
+    try {
+      const data = await addSession({ dayOfWeek: newDay, start: newStart, end: newEnd })
+      setSessions(data.slots || [])
+      setNewDay('2')
+      setNewStart('19:50')
+      setNewEnd('22:00')
+    } catch (err) {
+      setSessionError(err.message)
+    } finally {
+      setSessionSaving(false)
+    }
+  }
+
+  async function handleRemoveSession(id) {
+    setRemovingSessionId(id)
+    setSessionError('')
+    try {
+      const data = await removeSession(id)
+      setSessions(data.slots || [])
+    } catch (err) {
+      setSessionError(err.message)
+    } finally {
+      setRemovingSessionId(null)
+    }
+  }
+
+  function formatClock(time) {
+    if (!time) return ''
+    const [h, m] = time.split(':').map((n) => parseInt(n, 10))
+    const period = h >= 12 ? 'PM' : 'AM'
+    const hour12 = h % 12 === 0 ? 12 : h % 12
+    return `${hour12}:${String(m).padStart(2, '0')} ${period}`
   }
 
   async function handleLogout() {
@@ -460,7 +525,7 @@ export default function AdminDashboardPage() {
               <div className="text-sm font-medium text-gray-200">
                 {modeStatus.mode === 'on'
                   ? 'Attendance is recorded for every lookup, regardless of session time.'
-                  : 'Attendance follows the regular session schedule (Tue & Wed).'}
+                  : `Attendance follows the session schedule (${[...new Set(sessions.map((s) => DAY_NAMES[s.dayOfWeek]))].join(', ') || 'none set'}).`}
               </div>
             </div>
             <div className="rounded-lg bg-metallic-900 border border-gray-700/50 p-4">
@@ -474,6 +539,100 @@ export default function AdminDashboardPage() {
           {modeError && (
             <div className="mt-4 p-3 rounded-lg bg-red-900/30 border border-red-800/50">
               <p className="text-red-300 text-xs font-medium">{modeError}</p>
+            </div>
+          )}
+        </div>
+
+        <div className="rounded-xl bg-metallic-800 border border-gray-600/50 p-5 mb-6 print:hidden">
+          <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
+            <div className="flex items-center gap-3">
+              <h2 className="text-sm font-semibold text-gray-200">Session Schedule</h2>
+              <span className="inline-block text-[10px] uppercase tracking-widest text-gray-500">
+                {sessionTimezone}
+              </span>
+            </div>
+          </div>
+
+          {sessionsLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <svg className="animate-spin h-6 w-6 text-gray-400" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+            </div>
+          ) : sessions.length === 0 ? (
+            <p className="text-xs text-gray-500">No sessions scheduled. Add one below.</p>
+          ) : (
+            <div className="space-y-2 mb-4">
+              {sessions.map((s) => (
+                <div
+                  key={s.id}
+                  className="flex items-center justify-between gap-3 rounded-lg bg-metallic-900 border border-gray-700/50 px-4 py-3"
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm font-medium text-gray-100">{DAY_NAMES[s.dayOfWeek]}</span>
+                    <span className="text-sm text-gray-400">
+                      {formatClock(s.start)} – {formatClock(s.end)}
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => handleRemoveSession(s.id)}
+                    disabled={removingSessionId === s.id}
+                    className="px-3 py-1.5 rounded-lg bg-red-900/40 border border-red-800/50 text-red-300 text-xs font-medium hover:bg-red-900/60 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {removingSessionId === s.id ? 'Removing...' : 'Remove'}
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <form onSubmit={handleAddSession} className="flex flex-wrap gap-3 items-end pt-4 border-t border-gray-700/50">
+            <div className="flex-1 min-w-[140px]">
+              <label className="block text-[10px] uppercase tracking-widest text-gray-500 mb-1">Day</label>
+              <select
+                value={newDay}
+                onChange={(e) => setNewDay(e.target.value)}
+                disabled={sessionSaving}
+                className="w-full px-3 py-2 rounded-lg bg-metallic-900 border border-gray-600/50 text-gray-200 text-sm outline-none focus:border-gray-400"
+              >
+                {DAY_NAMES.map((name, i) => (
+                  <option key={i} value={i}>{name}</option>
+                ))}
+              </select>
+            </div>
+            <div className="flex-1 min-w-[110px]">
+              <label className="block text-[10px] uppercase tracking-widest text-gray-500 mb-1">Start</label>
+              <input
+                type="time"
+                value={newStart}
+                onChange={(e) => setNewStart(e.target.value)}
+                disabled={sessionSaving}
+                className="w-full px-3 py-2 rounded-lg bg-metallic-900 border border-gray-600/50 text-gray-200 text-sm outline-none focus:border-gray-400"
+              />
+            </div>
+            <div className="flex-1 min-w-[110px]">
+              <label className="block text-[10px] uppercase tracking-widest text-gray-500 mb-1">End</label>
+              <input
+                type="time"
+                value={newEnd}
+                onChange={(e) => setNewEnd(e.target.value)}
+                disabled={sessionSaving}
+                className="w-full px-3 py-2 rounded-lg bg-metallic-900 border border-gray-600/50 text-gray-200 text-sm outline-none focus:border-gray-400"
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={sessionSaving || !newStart || !newEnd}
+              className="px-5 py-2 rounded-lg text-sm font-semibold transition-all bg-gradient-to-r from-gray-600 to-gray-500 text-gray-100 border border-gray-500/50 shadow-lg hover:from-gray-500 hover:to-gray-400 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {sessionSaving ? 'Adding...' : 'Add Session'}
+            </button>
+          </form>
+
+          {sessionError && (
+            <div className="mt-4 p-3 rounded-lg bg-red-900/30 border border-red-800/50">
+              <p className="text-red-300 text-xs font-medium">{sessionError}</p>
             </div>
           )}
         </div>

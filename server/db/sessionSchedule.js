@@ -32,7 +32,7 @@ async function seedDefaultSlots() {
   const count = (await getPool().query('SELECT COUNT(*)::int AS n FROM session_schedule')).rows[0].n
   if (count > 0) return
 
-  const configPath = path.resolve(__dirname, '..', '..', 'session-config.json')
+  const configPath = path.resolve(__dirname, '..', 'session-config.json')
   let days = [2, 3]
   let start = '19:50'
   let end = '22:00'

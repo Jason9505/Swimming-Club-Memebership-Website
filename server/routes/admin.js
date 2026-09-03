@@ -10,6 +10,7 @@ import {
 } from '../database.js'
 import { parseDate } from '../services/googleSheets.js'
 import { getSyncStatus, forceSync } from '../sync.js'
+import { getSessionSlots, addSessionSlot, removeSessionSlot, getTimezone } from '../database.js'
 
 const router = Router()
 
@@ -152,6 +153,37 @@ router.post('/admin/sync', requireAdmin, async (req, res) => {
   } catch (err) {
     console.error('Admin sync trigger error:', err)
     res.status(500).json({ error: 'Server error.' })
+  }
+})
+
+router.get('/admin/sessions', requireAdmin, async (req, res) => {
+  try {
+    const [slots, timezone] = await Promise.all([getSessionSlots(), getTimezone()])
+    res.json({ slots, timezone })
+  } catch (err) {
+    console.error('Admin sessions get error:', err)
+    res.status(500).json({ error: 'Server error.' })
+  }
+})
+
+router.post('/admin/sessions', requireAdmin, async (req, res) => {
+  const { dayOfWeek, start, end } = req.body || {}
+  try {
+    const slots = await addSessionSlot({ dayOfWeek, start, end })
+    res.json({ slots })
+  } catch (err) {
+    console.error('Admin session add error:', err)
+    res.status(400).json({ error: err.message || 'Failed to add session' })
+  }
+})
+
+router.delete('/admin/sessions/:id', requireAdmin, async (req, res) => {
+  try {
+    const slots = await removeSessionSlot(req.params.id)
+    res.json({ slots })
+  } catch (err) {
+    console.error('Admin session remove error:', err)
+    res.status(400).json({ error: err.message || 'Failed to remove session' })
   }
 })
 
