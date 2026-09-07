@@ -8,6 +8,7 @@ export {
   getAllMembersMap,
   clearAllMembers,
   getMemberCount,
+  pruneMembers,
 } from './db/members.js'
 
 export {
@@ -27,6 +28,7 @@ export {
   getAllCommitteeMap,
   clearAllCommittee,
   getCommitteeCount,
+  pruneCommittee,
 } from './db/committee.js'
 
 export {

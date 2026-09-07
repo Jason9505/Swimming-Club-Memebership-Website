@@ -2,6 +2,8 @@ import { loadSheetsConfig, getMemberRows } from './services/googleSheets.js'
 import {
   upsertMembers,
   upsertCommittee,
+  pruneMembers,
+  pruneCommittee,
   getMemberCount,
   getCommitteeCount,
   getPool,
@@ -27,9 +29,11 @@ async function syncSheet(cfg) {
   const members = await getMemberRows(cfg.id)
   if (isCommitteeConfig(cfg)) {
     const count = await upsertCommittee(members)
+    await pruneCommittee(members)
     console.log(`[Sync] ${cfg.label}: ${count} committee members synced`)
   } else {
     const count = await upsertMembers(members, cfg.label)
+    await pruneMembers(members, cfg.label)
     console.log(`[Sync] ${cfg.label}: ${count} members synced`)
   }
 }

@@ -96,6 +96,14 @@ export async function findMember(studentId) {
   })
 }
 
+export async function pruneMembers(members, spreadsheetLabel) {
+  const ids = members.map(m => (m.studentId || '').trim()).filter(Boolean)
+  await getPool().query(
+    'DELETE FROM members WHERE source_spreadsheet = $1 AND NOT (student_id = ANY($2::text[]))',
+    [spreadsheetLabel, ids]
+  )
+}
+
 export async function getAllMembersMap() {
   const d = getPool()
   const rows = (await d.query('SELECT * FROM members')).rows

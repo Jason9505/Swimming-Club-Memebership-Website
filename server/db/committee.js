@@ -61,6 +61,14 @@ export async function findCommitteeMember(studentId) {
   }
 }
 
+export async function pruneCommittee(members) {
+  const ids = members.map(m => (m.studentId || '').trim()).filter(Boolean)
+  await getPool().query(
+    'DELETE FROM committee WHERE NOT (student_id = ANY($1::text[]))',
+    [ids]
+  )
+}
+
 export async function getAllCommitteeMap() {
   const d = getPool()
   const rows = (
