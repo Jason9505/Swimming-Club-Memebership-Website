@@ -9,6 +9,7 @@ export {
   clearAllMembers,
   getMemberCount,
   pruneMembers,
+  pruneStaleMemberRows,
 } from './db/members.js'
 
 export {

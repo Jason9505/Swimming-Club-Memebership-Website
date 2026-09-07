@@ -4,6 +4,7 @@ import {
   upsertCommittee,
   pruneMembers,
   pruneCommittee,
+  pruneStaleMemberRows,
   getMemberCount,
   getCommitteeCount,
   getPool,
@@ -73,6 +74,15 @@ export async function syncFromSheets() {
       errorCount++
       errors.push({ label, error: result.reason?.message || String(result.reason) })
     }
+  }
+
+  try {
+    const pruned = await pruneStaleMemberRows()
+    if (pruned > 0) {
+      console.log(`[Sync] Pruned ${pruned} stale member rows (older registrations per student)`)
+    }
+  } catch (err) {
+    console.error('[Sync] Stale member prune failed:', err.message)
   }
 
   const elapsed = ((Date.now() - startTime) / 1000).toFixed(1)

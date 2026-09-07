@@ -76,9 +76,14 @@ export async function findMember(studentId) {
   if (rows.length === 0) return null
 
   const best = { ...rows[0] }
+  let bestExpiry = parseDate(best.expiry_date)
   for (const row of rows) {
+    const expiry = parseDate(row.expiry_date)
+    if (expiry && (!bestExpiry || expiry > bestExpiry)) {
+      bestExpiry = expiry
+      best.expiry_date = row.expiry_date
+    }
     if (!best.date_joined && row.date_joined) best.date_joined = row.date_joined
-    if (!best.expiry_date && row.expiry_date) best.expiry_date = row.expiry_date
     if (!best.level && row.level) best.level = row.level
     if (!best.gender && row.gender) best.gender = row.gender
     if (!best.faculty && row.faculty) best.faculty = row.faculty
@@ -106,12 +111,19 @@ export async function pruneMembers(members, spreadsheetLabel) {
 
 export async function getAllMembersMap() {
   const d = getPool()
-  const rows = (await d.query('SELECT * FROM members')).rows
+  const rows = (
+    await d.query(
+      'SELECT * FROM members ORDER BY date_joined DESC NULLS LAST'
+    )
+  ).rows
   const map = {}
 
   for (const row of rows) {
     const sid = row.student_id
     if (!sid) continue
+
+    const expiry = parseDate(row.expiry_date)
+
     if (!map[sid]) {
       map[sid] = {
         studentId: sid,
@@ -124,8 +136,11 @@ export async function getAllMembersMap() {
       }
     } else {
       const existing = map[sid]
+      const existingExpiry = parseDate(existing.expiryDate)
+      if (expiry && (!existingExpiry || expiry > existingExpiry)) {
+        existing.expiryDate = row.expiry_date
+      }
       if (!existing.dateJoined && row.date_joined) existing.dateJoined = row.date_joined
-      if (!existing.expiryDate && row.expiry_date) existing.expiryDate = row.expiry_date
       if (!existing.level && row.level) existing.level = row.level
       if (!existing.gender && row.gender) existing.gender = row.gender
       if (!existing.faculty && row.faculty) existing.faculty = row.faculty
@@ -142,6 +157,18 @@ export async function getAllMembersMap() {
 
 export async function clearAllMembers() {
   await getPool().query('DELETE FROM members')
+}
+
+export async function pruneStaleMemberRows() {
+  const res = await getPool().query(
+    `DELETE FROM members AS m
+     USING members AS m2
+     WHERE m.student_id = m2.student_id
+       AND m.date_joined IS NOT NULL
+       AND m2.date_joined IS NOT NULL
+       AND m.date_joined < m2.date_joined`
+  )
+  return res.rowCount
 }
 
 export async function getMemberCount() {

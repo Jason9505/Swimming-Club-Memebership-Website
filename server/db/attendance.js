@@ -1,4 +1,5 @@
 import { getPool, initDb } from './index.js'
+import { parseDate } from '../services/googleSheets.js'
 
 export function initAttendanceDb() {
   return initDb()
@@ -75,15 +76,21 @@ export async function getAttendanceSummary() {
   ).rows[0]
   const totalAttendance = totalRow.count
 
-  const memberRows = (await d.query('SELECT * FROM members')).rows
+  const memberRows = (
+    await d.query('SELECT student_id, expiry_date FROM members ORDER BY date_joined DESC NULLS LAST')
+  ).rows
   const membersMap = {}
   for (const row of memberRows) {
     const sid = row.student_id
     if (!sid) continue
+    const expiry = parseDate(row.expiry_date)
     if (!membersMap[sid]) {
       membersMap[sid] = { expiryDate: row.expiry_date }
     } else {
-      if (!membersMap[sid].expiryDate && row.expiry_date) membersMap[sid].expiryDate = row.expiry_date
+      const existingExpiry = parseDate(membersMap[sid].expiryDate)
+      if (expiry && (!existingExpiry || expiry > existingExpiry)) {
+        membersMap[sid].expiryDate = row.expiry_date
+      }
     }
   }
 
