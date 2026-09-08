@@ -93,19 +93,22 @@ function normalizeHeader(h) {
 
 function findColumnIndex(headers, aliases) {
   const normHeaders = headers.map(h => normalizeHeader(h))
+  let bestIdx = -1
+  let bestScore = -1
+
   for (let i = 0; i < normHeaders.length; i++) {
     const h = normHeaders[i]
     for (const alias of aliases) {
-      if (h === alias) return i
+      if (h === alias) {
+        const score = alias.length * 2
+        if (score > bestScore) { bestScore = score; bestIdx = i }
+      } else if (h.includes(alias)) {
+        const score = alias.length
+        if (score > bestScore) { bestScore = score; bestIdx = i }
+      }
     }
   }
-  for (let i = 0; i < normHeaders.length; i++) {
-    const h = normHeaders[i]
-    for (const alias of aliases) {
-      if (h.includes(alias)) return i
-    }
-  }
-  return -1
+  return bestIdx
 }
 
 function parseDate(dateStr) {
