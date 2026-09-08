@@ -8,3 +8,5 @@ server/config/credentials.json
 dist/
 server/public/
 *.db
+.vercel
+.env*
