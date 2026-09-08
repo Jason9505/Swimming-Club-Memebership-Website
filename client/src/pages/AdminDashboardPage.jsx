@@ -40,7 +40,6 @@ export default function AdminDashboardPage() {
     startDate: '',
     endDate: '',
     studentId: '',
-    faculty: '',
     membershipStatus: '',
   })
 
@@ -211,7 +210,7 @@ export default function AdminDashboardPage() {
   }
 
   function handleClear() {
-    const cleared = { startDate: '', endDate: '', studentId: '', faculty: '', membershipStatus: '' }
+    const cleared = { startDate: '', endDate: '', studentId: '', membershipStatus: '' }
     setFilters(cleared)
     fetchData(cleared)
   }
@@ -670,16 +669,6 @@ export default function AdminDashboardPage() {
             />
           </div>
           <div className="flex-1 min-w-[140px]">
-            <label className="block text-[10px] uppercase tracking-widest text-gray-500 mb-1">Faculty</label>
-            <input
-              type="text"
-              value={filters.faculty}
-              onChange={(e) => handleFilterChange('faculty', e.target.value)}
-              placeholder="e.g. FCI"
-              className="w-full px-3 py-2 rounded-lg bg-metallic-900 border border-gray-600/50 text-gray-200 text-sm outline-none placeholder-gray-600 focus:border-gray-400"
-            />
-          </div>
-          <div className="flex-1 min-w-[140px]">
             <label className="block text-[10px] uppercase tracking-widest text-gray-500 mb-1">Status</label>
             <select
               value={filters.membershipStatus}
@@ -728,7 +717,6 @@ export default function AdminDashboardPage() {
                   <th className="text-left py-3 px-4 text-[10px] uppercase tracking-widest text-gray-400 font-medium print:text-gray-600">Timestamp</th>
                   <th className="text-left py-3 px-4 text-[10px] uppercase tracking-widest text-gray-400 font-medium print:text-gray-600">Student ID</th>
                   <th className="text-left py-3 px-4 text-[10px] uppercase tracking-widest text-gray-400 font-medium print:text-gray-600">Full Name</th>
-                  <th className="text-left py-3 px-4 text-[10px] uppercase tracking-widest text-gray-400 font-medium print:text-gray-600">Faculty</th>
                   <th className="text-left py-3 px-4 text-[10px] uppercase tracking-widest text-gray-400 font-medium print:text-gray-600">Level</th>
                   <th className="text-left py-3 px-4 text-[10px] uppercase tracking-widest text-gray-400 font-medium print:text-gray-600">Status</th>
                 </tr>
@@ -736,7 +724,7 @@ export default function AdminDashboardPage() {
               <tbody>
                 {records.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="py-12 text-center text-gray-500">
+                    <td colSpan={6} className="py-12 text-center text-gray-500">
                       No attendance records found.
                     </td>
                   </tr>
@@ -754,7 +742,6 @@ export default function AdminDashboardPage() {
                         {rec.studentId}
                       </td>
                       <td className="py-3 px-4 text-gray-200 print:text-gray-800">{rec.fullName}</td>
-                      <td className="py-3 px-4 text-gray-300 print:text-gray-700">{rec.faculty || '\u2014'}</td>
                       <td className="py-3 px-4">{levelBadge(rec.swimmingLevel)}</td>
                       <td className="py-3 px-4">{statusBadge(rec.membershipStatus)}</td>
                     </tr>
