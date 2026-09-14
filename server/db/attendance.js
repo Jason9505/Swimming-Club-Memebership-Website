@@ -1,6 +1,12 @@
 import { getPool, initDb } from './index.js'
 import { parseDate } from '../services/googleSheets.js'
 
+function nextDayString(dateStr) {
+  const d = new Date(`${dateStr}T00:00:00Z`)
+  d.setUTCDate(d.getUTCDate() + 1)
+  return d.toISOString().slice(0, 10)
+}
+
 export function initAttendanceDb() {
   return initDb()
 }
@@ -59,8 +65,8 @@ export async function getAttendanceRows(filters = {}) {
     params.push(filters.startDate)
   }
   if (filters.endDate) {
-    query += ` AND "timestamp" <= $${idx++}`
-    params.push(filters.endDate + 'T23:59:59')
+    query += ` AND "timestamp" < $${idx++}`
+    params.push(nextDayString(filters.endDate))
   }
 
   query += ' ORDER BY "timestamp" DESC'
