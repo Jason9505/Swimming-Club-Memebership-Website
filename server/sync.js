@@ -27,7 +27,11 @@ function isCommitteeConfig(cfg) {
 }
 
 async function syncSheet(cfg) {
+  const readStart = Date.now()
   const members = await getMemberRows(cfg.id)
+  const readMs = Date.now() - readStart
+
+  const writeStart = Date.now()
   if (isCommitteeConfig(cfg)) {
     const count = await upsertCommittee(members)
     await pruneCommittee(members)
@@ -37,6 +41,9 @@ async function syncSheet(cfg) {
     await pruneMembers(members, cfg.label)
     console.log(`[Sync] ${cfg.label}: ${count} members synced`)
   }
+  const writeMs = Date.now() - writeStart
+
+  return { label: cfg.label, readMs, writeMs }
 }
 
 export async function syncFromSheets() {
@@ -51,13 +58,14 @@ export async function syncFromSheets() {
 
   let successCount = 0
   let errorCount = 0
+  let readMs = 0
+  let writeMs = 0
   const errors = []
 
   const results = await Promise.allSettled(
     configs.map(async (cfg) => {
       try {
-        await syncSheet(cfg)
-        return { label: cfg.label }
+        return await syncSheet(cfg)
       } catch (err) {
         err.label = cfg.label
         throw err
@@ -68,6 +76,8 @@ export async function syncFromSheets() {
   for (const result of results) {
     if (result.status === 'fulfilled') {
       successCount++
+      readMs += result.value?.readMs || 0
+      writeMs += result.value?.writeMs || 0
     } else {
       const label = result.reason?.label || 'unknown'
       console.error(`[Sync] Error:`, result.reason?.message || result.reason)
@@ -88,7 +98,7 @@ export async function syncFromSheets() {
   const elapsed = ((Date.now() - startTime) / 1000).toFixed(1)
   const dbCount = await getMemberCount()
   const committeeDbCount = await getCommitteeCount()
-  console.log(`[Sync] Complete in ${elapsed}s — ${dbCount} unique members, ${committeeDbCount} committee in DB (${successCount} sheets OK, ${errorCount} failed)`)
+  console.log(`[Sync] Complete in ${elapsed}s — read ${(readMs / 1000).toFixed(1)}s, write ${(writeMs / 1000).toFixed(1)}s — ${dbCount} unique members, ${committeeDbCount} committee in DB (${successCount} sheets OK, ${errorCount} failed)`)
 
   const result = {
     success: errorCount === 0,
@@ -97,6 +107,8 @@ export async function syncFromSheets() {
     sheetsSynced: successCount,
     sheetsFailed: errorCount,
     elapsed: `${elapsed}s`,
+    readMs,
+    writeMs,
     errors,
   }
 

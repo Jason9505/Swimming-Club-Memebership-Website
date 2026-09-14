@@ -220,55 +220,79 @@ async function apiWithRetry(sheetId, method, endpoint, body, retries = 2) {
   }
 }
 
-async function readTabData(sheetId, tabName) {
+function parseMemberRows(rows) {
   const results = []
+  if (!rows || rows.length < 2) return results
 
-  try {
-    const range = `'${tabName}'!A1:Z1000`
-    const data = await apiWithRetry(sheetId, 'GET', `values/${encodeURIComponent(range)}`)
-    const rows = data.values
-    if (!rows || rows.length < 2) return results
+  let headerRowIdx = -1
+  let headers = null
+  const maxHeaderScan = Math.min(10, rows.length)
 
-    let headerRowIdx = -1
-    let headers = null
-    const maxHeaderScan = Math.min(10, rows.length)
-
-    for (let h = 0; h < maxHeaderScan; h++) {
-      const candidate = rows[h]
-      const sidIdx = findColumnIndex(candidate, COLUMN_ALIASES.studentId)
-      const nameIdx = findColumnIndex(candidate, COLUMN_ALIASES.fullName)
-      if (sidIdx !== -1 || nameIdx !== -1) {
-        headerRowIdx = h
-        headers = candidate
-        break
-      }
+  for (let h = 0; h < maxHeaderScan; h++) {
+    const candidate = rows[h]
+    const sidIdx = findColumnIndex(candidate, COLUMN_ALIASES.studentId)
+    const nameIdx = findColumnIndex(candidate, COLUMN_ALIASES.fullName)
+    if (sidIdx !== -1 || nameIdx !== -1) {
+      headerRowIdx = h
+      headers = candidate
+      break
     }
+  }
 
-    if (headerRowIdx === -1) return results
+  if (headerRowIdx === -1) return results
 
-    for (let i = headerRowIdx + 1; i < rows.length; i++) {
-      const r = rows[i]
-      const member = extractMemberRow(headers, r)
-      if (member && (member.studentId || member.fullName)) {
-        results.push(member)
-      }
+  for (let i = headerRowIdx + 1; i < rows.length; i++) {
+    const r = rows[i]
+    const member = extractMemberRow(headers, r)
+    if (member && (member.studentId || member.fullName)) {
+      results.push(member)
     }
-  } catch {
-    // failed tab returns empty
   }
 
   return results
 }
 
+async function readTabData(sheetId, tabName) {
+  try {
+    const range = `'${tabName}'!A1:Z1000`
+    const data = await apiWithRetry(sheetId, 'GET', `values/${encodeURIComponent(range)}`)
+    return parseMemberRows(data.values)
+  } catch {
+    // failed tab returns empty
+    return []
+  }
+}
+
+const TAB_READ_CHUNK = 20
+
 export async function getMemberRows(sheetId) {
   const info = await apiWithRetry(sheetId, 'GET', '')
-  const tabs = info.sheets || []
+  const tabs = (info.sheets || [])
+    .map((tab) => tab.properties.title)
+    .filter((name) => name !== 'Attendance')
+
   const allMembers = []
 
-  for (const tab of tabs) {
-    const name = tab.properties.title
-    if (name === 'Attendance') continue
-    const members = await readTabData(sheetId, name)
+  for (let i = 0; i < tabs.length; i += TAB_READ_CHUNK) {
+    const chunk = tabs.slice(i, i + TAB_READ_CHUNK)
+    const members = []
+
+    try {
+      const ranges = chunk.map((t) => `'${t}'!A1:Z1000`)
+      const data = await apiWithRetry(
+        sheetId,
+        'GET',
+        `values:batchGet?${ranges.map((r) => `ranges=${encodeURIComponent(r)}`).join('&')}`
+      )
+      for (const vr of data.valueRanges || []) {
+        members.push(...parseMemberRows(vr.values))
+      }
+    } catch {
+      for (const tab of chunk) {
+        members.push(...(await readTabData(sheetId, tab)))
+      }
+    }
+
     allMembers.push(...members)
   }
 

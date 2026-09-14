@@ -21,43 +21,41 @@ function computeExpiryIfMissing(member) {
 
 export async function upsertMembers(members, spreadsheetLabel) {
   const d = getPool()
-  const client = await d.connect()
-  try {
-    await client.query('BEGIN')
 
-    const stmt = `
-      INSERT INTO members (student_id, full_name, date_joined, expiry_date, level, gender, faculty, source_spreadsheet, updated_at)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
-      ON CONFLICT (student_id, source_spreadsheet) DO UPDATE SET
-        full_name = CASE WHEN excluded.full_name != '' THEN excluded.full_name ELSE members.full_name END,
-        date_joined = CASE WHEN excluded.date_joined != '' THEN excluded.date_joined ELSE members.date_joined END,
-        expiry_date = CASE WHEN excluded.expiry_date != '' THEN excluded.expiry_date ELSE members.expiry_date END,
-        level = CASE WHEN excluded.level != '' THEN excluded.level ELSE members.level END,
-        gender = CASE WHEN excluded.gender != '' THEN excluded.gender ELSE members.gender END,
-        faculty = CASE WHEN excluded.faculty != '' THEN excluded.faculty ELSE members.faculty END,
-        updated_at = NOW()
-    `
-
-    for (const m of members) {
-      await client.query(stmt, [
-        m.studentId,
-        m.fullName,
-        m.dateJoined,
-        m.expiryDate,
-        m.level,
-        m.gender,
-        m.faculty,
-        spreadsheetLabel,
-      ])
-    }
-
-    await client.query('COMMIT')
-  } catch (err) {
-    await client.query('ROLLBACK')
-    throw err
-  } finally {
-    client.release()
+  const byId = new Map()
+  for (const m of members) {
+    const sid = (m.studentId || '').trim()
+    if (!sid) continue
+    byId.set(sid, m)
   }
+  members = [...byId.values()]
+
+  const ids = members.map((m) => m.studentId.trim())
+  const names = members.map((m) => m.fullName || '')
+  const joined = members.map((m) => m.dateJoined || '')
+  const expiries = members.map((m) => m.expiryDate || '')
+  const levels = members.map((m) => m.level || '')
+  const genders = members.map((m) => m.gender || '')
+  const faculties = members.map((m) => m.faculty || '')
+  const labels = members.map(() => spreadsheetLabel)
+
+  await d.query(
+    `
+    INSERT INTO members (student_id, full_name, date_joined, expiry_date, level, gender, faculty, source_spreadsheet, updated_at)
+    SELECT t.student_id, t.full_name, t.date_joined, t.expiry_date, t.level, t.gender, t.faculty, t.source_spreadsheet, NOW()
+    FROM UNNEST($1::text[], $2::text[], $3::text[], $4::text[], $5::text[], $6::text[], $7::text[], $8::text[])
+      AS t(student_id, full_name, date_joined, expiry_date, level, gender, faculty, source_spreadsheet)
+    ON CONFLICT (student_id, source_spreadsheet) DO UPDATE SET
+      full_name = CASE WHEN excluded.full_name != '' THEN excluded.full_name ELSE members.full_name END,
+      date_joined = CASE WHEN excluded.date_joined != '' THEN excluded.date_joined ELSE members.date_joined END,
+      expiry_date = CASE WHEN excluded.expiry_date != '' THEN excluded.expiry_date ELSE members.expiry_date END,
+      level = CASE WHEN excluded.level != '' THEN excluded.level ELSE members.level END,
+      gender = CASE WHEN excluded.gender != '' THEN excluded.gender ELSE members.gender END,
+      faculty = CASE WHEN excluded.faculty != '' THEN excluded.faculty ELSE members.faculty END,
+      updated_at = NOW()
+    `,
+    [ids, names, joined, expiries, levels, genders, faculties, labels]
+  )
 
   return members.length
 }
