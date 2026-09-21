@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { login, logout, checkAuth, getAttendance, getSummary, getSyncStatus, triggerSync, getAttendanceMode, setAttendanceMode, getSessions, addSession, removeSession } from '../api/admin'
 
@@ -42,6 +42,20 @@ export default function AdminDashboardPage() {
     studentId: '',
     membershipStatus: '',
   })
+
+  const exportMenuRef = useRef(null)
+  const [exportOpen, setExportOpen] = useState(false)
+
+  useEffect(() => {
+    if (!exportOpen) return
+    function handleClickOutside(e) {
+      if (exportMenuRef.current && !exportMenuRef.current.contains(e.target)) {
+        setExportOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [exportOpen])
 
   useEffect(() => {
     checkAuth().then((ok) => {
@@ -200,6 +214,49 @@ export default function AdminDashboardPage() {
     setSummary({ totalAttendance: 0, activeMembers: 0, expiredMembers: 0 })
   }
 
+  async function handleExportExcel() {
+    const XLSX = await import('xlsx')
+
+    const filterParts = []
+    if (filters.startDate) filterParts.push(`from ${filters.startDate}`)
+    if (filters.endDate) filterParts.push(`to ${filters.endDate}`)
+    if (filters.studentId) filterParts.push(`ID: ${filters.studentId}`)
+    if (filters.membershipStatus) filterParts.push(`Status: ${filters.membershipStatus}`)
+
+    const aoa = [
+      ['MMU Swimming Club'],
+      ['Attendance Report'],
+      [`Generated: ${new Date().toLocaleString('en-GB')}`],
+      [`Filters: ${filterParts.length ? filterParts.join(', ') : 'None'}`],
+      [],
+      ['#', 'Timestamp', 'Student ID', 'Full Name', 'Level', 'Status'],
+      ...records.map((rec, idx) => [
+        idx + 1,
+        formatTimestamp(rec.timestamp),
+        rec.studentId,
+        rec.fullName,
+        rec.swimmingLevel || '',
+        rec.membershipStatus,
+      ]),
+    ]
+
+    const ws = XLSX.utils.aoa_to_sheet(aoa)
+    ws['!cols'] = [
+      { wch: 6 },
+      { wch: 20 },
+      { wch: 16 },
+      { wch: 26 },
+      { wch: 14 },
+      { wch: 14 },
+    ]
+
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'Attendance')
+
+    const dateStr = new Date().toISOString().slice(0, 10)
+    XLSX.writeFile(wb, `attendance-report-${dateStr}.xlsx`)
+  }
+
   function handleFilterChange(key, value) {
     setFilters(prev => ({ ...prev, [key]: value }))
   }
@@ -342,12 +399,43 @@ export default function AdminDashboardPage() {
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <button
-              onClick={() => window.print()}
-              className="px-4 py-2 rounded-lg bg-metallic-700 border border-gray-600/50 text-gray-300 text-sm font-medium hover:bg-metallic-600 transition-all print:hidden"
-            >
-              Print / PDF
-            </button>
+            <div className="relative" ref={exportMenuRef}>
+              <button
+                onClick={() => setExportOpen((o) => !o)}
+                className="px-4 py-2 rounded-lg bg-metallic-700 border border-gray-600/50 text-gray-300 text-sm font-medium hover:bg-metallic-600 transition-all print:hidden inline-flex items-center gap-2"
+              >
+                Export
+                <svg
+                  className={`h-4 w-4 transition-transform ${exportOpen ? 'rotate-180' : ''}`}
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+
+              {exportOpen && (
+                <div className="absolute right-0 mt-2 w-56 rounded-xl bg-metallic-800 border border-gray-600/50 shadow-xl z-20 overflow-hidden">
+                  <button
+                    onClick={() => { setExportOpen(false); window.print() }}
+                    className="w-full text-left px-4 py-3 text-sm text-gray-200 hover:bg-metallic-700 transition-colors"
+                  >
+                    <span className="block font-medium">Print / Save as PDF</span>
+                    <span className="block text-xs text-gray-500">Styled report via the browser print dialog</span>
+                  </button>
+                  <div className="h-px bg-gray-700/50" />
+                  <button
+                    onClick={() => { setExportOpen(false); handleExportExcel() }}
+                    className="w-full text-left px-4 py-3 text-sm text-gray-200 hover:bg-metallic-700 transition-colors"
+                  >
+                    <span className="block font-medium">Download Excel</span>
+                    <span className="block text-xs text-gray-500">Export the filtered rows to .xlsx</span>
+                  </button>
+                </div>
+              )}
+            </div>
             <button
               onClick={handleLogout}
               className="px-4 py-2 rounded-lg bg-red-900/40 border border-red-800/50 text-red-300 text-sm font-medium hover:bg-red-900/60 transition-all print:hidden"
