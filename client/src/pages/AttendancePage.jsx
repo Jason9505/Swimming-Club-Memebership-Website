@@ -105,7 +105,7 @@ export default function AttendancePage() {
                 rel="noopener noreferrer"
                 className="inline-block w-full py-3 rounded-xl font-semibold tracking-wider text-sm bg-gradient-to-r from-gold to-goldLight text-gray-900 border border-gold shadow-lg transition-all hover:opacity-90 active:scale-[0.98]"
               >
-                Join as Member
+                Join as Membership
               </a>
             )}
           </div>

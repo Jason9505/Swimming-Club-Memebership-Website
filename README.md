@@ -173,6 +173,18 @@ Attendance is only recorded during the club's sessions. The schedule lives in `s
 
 Outside the window, student IDs are still looked up and their card is shown (a **membership check**), but **no attendance is recorded**. `GET /api/session` returns the current session state and which day is active.
 
+### 8. Configure membership join / renewal links
+
+Edit `client/src/config.js`:
+
+```js
+export const JOIN_MEMBERSHIP_URL = 'https://example.com/registration-form'
+export const MEMBERSHIP_RENEWAL_URL = 'https://example.com/renewal-form'
+```
+
+- `JOIN_MEMBERSHIP_URL` — opened by the **Join as Membership** button when a Student ID isn't found
+- `MEMBERSHIP_RENEWAL_URL` — opened by the **Renew Membership** button on an expired member's card
+
 ## Running
 
 ### Step 1 — Start the Backend (Terminal 1)
@@ -273,6 +285,8 @@ The old `*.db` SQLite files are no longer used. To run locally, set `DATABASE_UR
 
 The page shows one pill per session day (Tue / Wed). When a session is open, its pill is highlighted gold with "Session open now" and the remaining time.
 
+If the **Student ID is not found**, a **Join as Membership** button is shown, linking to the club's registration form.
+
 **During a session** (Tue & Wed, 7:50 PM – 10:00 PM KL), checking in records your attendance:
 
 - Your digital membership card is displayed with:
@@ -281,7 +295,8 @@ The page shows one pill per session day (Tue / Wed). When a session is open, its
    - Member Since and Valid Thru dates (formatted as "D MMM YYYY")
    - Swimming Level banner (color-coded: Blue = Beginner, Green = Intermediate, Red = Advanced)
    - A green "✓ Attendance recorded successfully" message
-- If expired, a red "Membership Expired" bar appears below the card
+- If expired, the red bar reads "Membership expired — attendance not recorded. Please renew to continue." and a **Renew Membership** button appears above **Back to Attendance**
+- **Expired memberships are not recorded** — an expired member can still view their card, but their check-in does not create an attendance row
 - Checking in multiple times on the same day shows the card again with "already checked in" and does **not** record a duplicate
 
 **Outside a session**, the card is still shown as a **membership check** — your membership is verified but **no attendance is recorded** and no success message appears.
@@ -310,7 +325,8 @@ Navigate to `/admin` and log in with the configured admin password (`ADMIN_PASSW
 │   ├── src/
 │   │   ├── pages/              # AttendancePage, MembershipCardPage, AdminDashboardPage
 │   │   ├── components/         # MembershipCard, SessionBars
-│   │   └── api/                # attendance.js, admin.js
+│   │   ├── api/                # attendance.js, admin.js
+│   │   └── config.js           # Join / renewal redirect URLs
 │   ├── tailwind.config.js      # Dark metallic theme (+ gold committee colors)
 │   └── package.json
 ├── server/                     # Express backend
@@ -346,7 +362,8 @@ Navigate to `/admin` and log in with the configured admin password (`ADMIN_PASSW
 - **Session-based attendance** — Attendance is only recorded during configured sessions (Tue & Wed 7:50–10:00 PM, configurable via `session-config.json`). Membership checks work anytime.
 - **Live session indicator** — Per-day session bars on the attendance page highlight the open session with "Session open now".
 - **Level color coding** — Beginner (blue), Intermediate (green), Advanced (red).
-- **Expired membership** — Shows a red "Membership Expired" bar below the card when past the expiry date.
+- **Expired membership** — An expired member still sees their card, with a red bar ("Membership expired — attendance not recorded. Please renew to continue.") and a **Renew Membership** button. Their check-in is **not recorded** during sessions.
+- **Membership actions** — A not-found Student ID shows a **Join as Membership** button; expired members show a **Renew Membership** button. Both URLs are configured in `client/src/config.js`.
 - **Admin dashboard** — Password-protected dashboard with summary stats, filterable attendance table, and print support. Rate-limited to 5 login attempts per 15 minutes; sessions persist in Postgres so logins survive redeploys.
 
 ## things to improve later:
