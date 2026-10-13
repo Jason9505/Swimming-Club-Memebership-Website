@@ -114,7 +114,7 @@ export default function MembershipCardPage() {
               rel="noopener noreferrer"
               className="block mb-3 px-6 py-3 rounded-xl bg-gradient-to-r from-gold to-goldLight text-gray-900 font-semibold text-sm hover:opacity-90 transition-all"
             >
-              Renew Membership
+              Renew Member
             </a>
           )}
           <button
