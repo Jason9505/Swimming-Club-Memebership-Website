@@ -47,11 +47,13 @@ router.post('/attendance', async (req, res) => {
       return res.status(404).json({ error: 'Student ID Not Found' })
     }
 
-    const alreadyRecorded = inSession && await getAttendanceForStudentToday(studentId)
-    const attendanceRecorded = inSession && !alreadyRecorded
-
     const expiry = parseDate(member.expiryDate)
-    const membershipStatus = expiry && now > expiry ? 'Expired' : 'Active'
+    const expired = !!(expiry && now > expiry)
+    const membershipStatus = expired ? 'Expired' : 'Active'
+
+    const alreadyRecorded = inSession && !expired && await getAttendanceForStudentToday(studentId)
+    const attendanceRecorded = inSession && !expired && !alreadyRecorded
+    const attendanceSkipped = inSession && expired
 
     if (attendanceRecorded) {
       await insertAttendance({
@@ -73,6 +75,8 @@ router.post('/attendance', async (req, res) => {
       isSessionTime: inSession,
       mode: inSession ? 'attendance' : 'membership-check',
       attendanceRecorded,
+      alreadyRecorded,
+      attendanceSkipped,
       showDigitalCard: true,
     })
   } catch (err) {
