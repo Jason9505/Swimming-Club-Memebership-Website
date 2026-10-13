@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { login, logout, checkAuth, getAttendance, getSummary, getSyncStatus, triggerSync, getAttendanceMode, setAttendanceMode, getSessions, addSession, removeSession } from '../api/admin'
+import { login, logout, checkAuth, getAttendance, getSummary, getSyncStatus, triggerSync, getAttendanceMode, setAttendanceMode, getSessions, addSession, removeSession, removeAttendance, restoreAttendance } from '../api/admin'
 
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 
@@ -45,6 +45,12 @@ export default function AdminDashboardPage() {
 
   const exportMenuRef = useRef(null)
   const [exportOpen, setExportOpen] = useState(false)
+
+  const [confirmTarget, setConfirmTarget] = useState(null)
+  const [removingId, setRemovingId] = useState(null)
+  const [pendingUndo, setPendingUndo] = useState(null)
+  const [undoError, setUndoError] = useState('')
+  const undoTimerRef = useRef(null)
 
   useEffect(() => {
     if (!exportOpen) return
@@ -270,6 +276,68 @@ export default function AdminDashboardPage() {
     const cleared = { startDate: '', endDate: '', studentId: '', membershipStatus: '' }
     setFilters(cleared)
     fetchData(cleared)
+  }
+
+  function clearUndoTimer() {
+    if (undoTimerRef.current) {
+      clearTimeout(undoTimerRef.current)
+      undoTimerRef.current = null
+    }
+  }
+
+  useEffect(() => () => clearUndoTimer(), [])
+
+  function requestRemove(rec) {
+    setUndoError('')
+    setConfirmTarget(rec)
+  }
+
+  async function handleConfirmRemove() {
+    const rec = confirmTarget
+    if (!rec) return
+    setConfirmTarget(null)
+    setRemovingId(rec.id)
+    setUndoError('')
+    try {
+      const data = await removeAttendance(rec.id)
+      clearUndoTimer()
+      setRecords((prev) => prev.filter((r) => r.id !== rec.id))
+      setSummary((prev) => ({
+        ...prev,
+        totalAttendance: Math.max(0, prev.totalAttendance - 1),
+      }))
+      setPendingUndo({
+        record: data.record || rec,
+        label: `${rec.fullName || 'Member'} · ${rec.studentId}`,
+      })
+      undoTimerRef.current = setTimeout(() => {
+        setPendingUndo(null)
+        undoTimerRef.current = null
+      }, 8000)
+    } catch (err) {
+      setUndoError(err.message)
+    } finally {
+      setRemovingId(null)
+    }
+  }
+
+  async function handleUndo() {
+    if (!pendingUndo) return
+    clearUndoTimer()
+    setUndoError('')
+    try {
+      await restoreAttendance(pendingUndo.record)
+      setPendingUndo(null)
+      fetchData(filters)
+    } catch (err) {
+      setUndoError(err.message)
+    }
+  }
+
+  function dismissUndo() {
+    clearUndoTimer()
+    setPendingUndo(null)
+    setUndoError('')
   }
 
   function formatTimestamp(ts) {
@@ -807,12 +875,13 @@ export default function AdminDashboardPage() {
                   <th className="text-left py-3 px-4 text-[10px] uppercase tracking-widest text-gray-400 font-medium print:text-gray-600">Full Name</th>
                   <th className="text-left py-3 px-4 text-[10px] uppercase tracking-widest text-gray-400 font-medium print:text-gray-600">Level</th>
                   <th className="text-left py-3 px-4 text-[10px] uppercase tracking-widest text-gray-400 font-medium print:text-gray-600">Status</th>
+                  <th className="text-right py-3 px-4 text-[10px] uppercase tracking-widest text-gray-400 font-medium print:hidden">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {records.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="py-12 text-center text-gray-500">
+                    <td colSpan={7} className="py-12 text-center text-gray-500">
                       No attendance records found.
                     </td>
                   </tr>
@@ -832,6 +901,15 @@ export default function AdminDashboardPage() {
                       <td className="py-3 px-4 text-gray-200 print:text-gray-800">{rec.fullName}</td>
                       <td className="py-3 px-4">{levelBadge(rec.swimmingLevel)}</td>
                       <td className="py-3 px-4">{statusBadge(rec.membershipStatus)}</td>
+                      <td className="py-3 px-4 text-right print:hidden">
+                        <button
+                          onClick={() => requestRemove(rec)}
+                          disabled={removingId === rec.id}
+                          className="px-3 py-1.5 rounded-lg bg-red-900/40 border border-red-800/50 text-red-300 text-xs font-medium hover:bg-red-900/60 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {removingId === rec.id ? 'Removing...' : 'Remove'}
+                        </button>
+                      </td>
                     </tr>
                   ))
                 )}
@@ -846,6 +924,102 @@ export default function AdminDashboardPage() {
           </div>
         )}
       </div>
+
+      {confirmTarget && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center px-4 print:hidden">
+          <div
+            className="absolute inset-0 bg-black/60"
+            onClick={() => (removingId === null ? setConfirmTarget(null) : null)}
+          />
+          <div className="relative w-full max-w-sm rounded-2xl bg-metallic-800 border border-gray-600/50 shadow-2xl p-6">
+            <h3 className="text-base font-semibold text-gray-100 mb-2">
+              Remove from attendance?
+            </h3>
+            <p className="text-sm text-gray-400 mb-6">
+              This removes{' '}
+              <span className="text-gray-200 font-medium">
+                {confirmTarget.fullName || 'this member'}
+              </span>
+              {confirmTarget.studentId ? ` (${confirmTarget.studentId})` : ''} from the
+              attendance list. You can undo right after.
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setConfirmTarget(null)}
+                disabled={removingId !== null}
+                className="px-4 py-2 rounded-lg bg-metallic-700 border border-gray-600/50 text-gray-300 text-sm font-medium hover:bg-metallic-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmRemove}
+                disabled={removingId !== null}
+                className="px-4 py-2 rounded-lg bg-red-900/60 border border-red-800/50 text-red-200 text-sm font-semibold hover:bg-red-900/80 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {removingId !== null ? 'Removing...' : 'Remove'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {pendingUndo && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 print:hidden w-[calc(100%-2rem)] max-w-md"
+        >
+          <div className="flex items-center justify-between gap-3 rounded-xl bg-metallic-800 border border-gray-600/50 shadow-2xl px-4 py-3">
+            <p className={`text-sm truncate ${undoError ? 'text-red-300' : 'text-gray-300'}`}>
+              {undoError ? (
+                undoError
+              ) : (
+                <>
+                  Removed{' '}
+                  <span className="text-gray-100 font-medium">{pendingUndo.label}</span>
+                </>
+              )}
+            </p>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <button
+                onClick={handleUndo}
+                className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-gold to-goldLight text-gray-900 text-xs font-semibold hover:opacity-90 transition-all"
+              >
+                Undo
+              </button>
+              <button
+                onClick={dismissUndo}
+                aria-label="Dismiss"
+                className="p-1.5 rounded-lg text-gray-500 hover:text-gray-300 hover:bg-metallic-700 transition-all"
+              >
+                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {undoError && !pendingUndo && (
+        <div
+          role="alert"
+          className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 print:hidden w-[calc(100%-2rem)] max-w-md"
+        >
+          <div className="flex items-center justify-between gap-3 rounded-xl bg-red-900/80 border border-red-700 shadow-2xl px-4 py-3">
+            <p className="text-sm text-red-200">{undoError}</p>
+            <button
+              onClick={() => setUndoError('')}
+              aria-label="Dismiss"
+              className="p-1.5 rounded-lg text-red-300 hover:text-red-100 hover:bg-red-900 transition-all flex-shrink-0"
+            >
+              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

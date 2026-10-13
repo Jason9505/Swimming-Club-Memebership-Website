@@ -7,6 +7,8 @@ import {
   getAllCommitteeMap,
   getAttendanceMode,
   setAttendanceMode,
+  deleteAttendance,
+  restoreAttendance,
 } from '../database.js'
 import { parseDate } from '../services/googleSheets.js'
 import { getSyncStatus, forceSync } from '../sync.js'
@@ -86,6 +88,7 @@ router.get('/admin/attendance', requireAdmin, async (req, res) => {
         : expiry && now > expiry ? 'Expired' : (row.membership_status || 'Active')
 
       return {
+        id: row.id,
         timestamp: row.timestamp,
         studentId: sid,
         fullName: row.full_name || '',
@@ -98,6 +101,65 @@ router.get('/admin/attendance', requireAdmin, async (req, res) => {
     res.json({ records, total: records.length })
   } catch (err) {
     console.error('Admin attendance error:', err)
+    res.status(500).json({ error: 'Server error.' })
+  }
+})
+
+router.delete('/admin/attendance/:id', requireAdmin, async (req, res) => {
+  const id = parseInt(req.params.id, 10)
+  if (isNaN(id)) {
+    return res.status(400).json({ error: 'Invalid attendance id' })
+  }
+  try {
+    const row = await deleteAttendance(id)
+    if (!row) {
+      return res.status(404).json({ error: 'Attendance record not found' })
+    }
+    res.json({
+      ok: true,
+      record: {
+        id: row.id,
+        timestamp: row.timestamp,
+        studentId: row.student_id,
+        fullName: row.full_name || '',
+        faculty: row.faculty || '',
+        membershipStatus: row.membership_status || '',
+      },
+    })
+  } catch (err) {
+    console.error('Admin attendance delete error:', err)
+    res.status(500).json({ error: 'Server error.' })
+  }
+})
+
+router.post('/admin/attendance/restore', requireAdmin, async (req, res) => {
+  const { timestamp, studentId, fullName, faculty, membershipStatus } = req.body || {}
+  if (!timestamp || !studentId) {
+    return res.status(400).json({ error: 'timestamp and studentId are required' })
+  }
+  try {
+    const row = await restoreAttendance({
+      timestamp: String(timestamp),
+      studentId: String(studentId),
+      fullName: fullName ? String(fullName) : '',
+      faculty: faculty ? String(faculty) : '',
+      membershipStatus: membershipStatus ? String(membershipStatus) : '',
+    })
+    res.json({
+      ok: true,
+      record: row
+        ? {
+            id: row.id,
+            timestamp: row.timestamp,
+            studentId: row.student_id,
+            fullName: row.full_name || '',
+            faculty: row.faculty || '',
+            membershipStatus: row.membership_status || '',
+          }
+        : null,
+    })
+  } catch (err) {
+    console.error('Admin attendance restore error:', err)
     res.status(500).json({ error: 'Server error.' })
   }
 })

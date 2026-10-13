@@ -17,6 +17,8 @@ export {
   getAttendanceDb,
   getAttendanceForStudentToday,
   insertAttendance,
+  deleteAttendance,
+  restoreAttendance,
   getAttendanceRows,
   getAttendanceSummary,
 } from './db/attendance.js'

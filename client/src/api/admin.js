@@ -45,6 +45,28 @@ export async function getSummary() {
   return res.json()
 }
 
+export async function removeAttendance(id) {
+  const res = await fetch(`${API_BASE}/admin/attendance/${id}`, {
+    method: 'DELETE',
+    credentials: 'include',
+  })
+  const data = await res.json()
+  if (!res.ok) throw new Error(data.error || 'Failed to remove record')
+  return data
+}
+
+export async function restoreAttendance(record) {
+  const res = await fetch(`${API_BASE}/admin/attendance/restore`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(record),
+  })
+  const data = await res.json()
+  if (!res.ok) throw new Error(data.error || 'Failed to restore record')
+  return data
+}
+
 export async function getSyncStatus() {
   const res = await fetch(`${API_BASE}/admin/sync`, { credentials: 'include' })
   if (!res.ok) throw new Error('Failed to fetch sync status')

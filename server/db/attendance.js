@@ -42,6 +42,41 @@ export async function insertAttendance(record) {
   )
 }
 
+export async function deleteAttendance(id) {
+  const d = getPool()
+  const res = await d.query('DELETE FROM attendance WHERE id = $1 RETURNING *', [id])
+  return res.rows[0] || null
+}
+
+export async function restoreAttendance(record) {
+  const d = getPool()
+  const inserted = await d.query(
+    `INSERT INTO attendance ("timestamp", student_id, full_name, faculty, membership_status)
+     SELECT $1, $2, $3, $4, $5
+     WHERE NOT EXISTS (
+       SELECT 1 FROM attendance
+       WHERE student_id = $2 AND LEFT("timestamp", 10) = LEFT($1, 10)
+     )
+     RETURNING *`,
+    [
+      record.timestamp,
+      record.studentId,
+      record.fullName,
+      record.faculty || '',
+      record.membershipStatus || '',
+    ]
+  )
+  if (inserted.rows[0]) return inserted.rows[0]
+
+  const existing = await d.query(
+    `SELECT * FROM attendance
+     WHERE student_id = $1 AND LEFT("timestamp", 10) = LEFT($2, 10)
+     LIMIT 1`,
+    [record.studentId, record.timestamp]
+  )
+  return existing.rows[0] || null
+}
+
 export async function getAttendanceRows(filters = {}) {
   const d = getPool()
   let query = 'SELECT * FROM attendance WHERE 1=1'
