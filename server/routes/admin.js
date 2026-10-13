@@ -105,27 +105,28 @@ router.get('/admin/attendance', requireAdmin, async (req, res) => {
   }
 })
 
-router.delete('/admin/attendance/:id', requireAdmin, async (req, res) => {
-  const id = parseInt(req.params.id, 10)
-  if (isNaN(id)) {
-    return res.status(400).json({ error: 'Invalid attendance id' })
+function toAttendanceRecord(row) {
+  return {
+    id: row.id,
+    timestamp: row.timestamp,
+    studentId: row.student_id,
+    fullName: row.full_name || '',
+    faculty: row.faculty || '',
+    membershipStatus: row.membership_status || '',
+  }
+}
+
+router.post('/admin/attendance/delete', requireAdmin, async (req, res) => {
+  const { ids } = req.body || {}
+  const cleanIds = Array.isArray(ids)
+    ? ids.map((n) => parseInt(n, 10)).filter((n) => !isNaN(n))
+    : []
+  if (cleanIds.length === 0) {
+    return res.status(400).json({ error: 'A non-empty array of ids is required' })
   }
   try {
-    const row = await deleteAttendance(id)
-    if (!row) {
-      return res.status(404).json({ error: 'Attendance record not found' })
-    }
-    res.json({
-      ok: true,
-      record: {
-        id: row.id,
-        timestamp: row.timestamp,
-        studentId: row.student_id,
-        fullName: row.full_name || '',
-        faculty: row.faculty || '',
-        membershipStatus: row.membership_status || '',
-      },
-    })
+    const rows = await deleteAttendance(cleanIds)
+    res.json({ ok: true, records: rows.map(toAttendanceRecord) })
   } catch (err) {
     console.error('Admin attendance delete error:', err)
     res.status(500).json({ error: 'Server error.' })
@@ -133,31 +134,24 @@ router.delete('/admin/attendance/:id', requireAdmin, async (req, res) => {
 })
 
 router.post('/admin/attendance/restore', requireAdmin, async (req, res) => {
-  const { timestamp, studentId, fullName, faculty, membershipStatus } = req.body || {}
-  if (!timestamp || !studentId) {
-    return res.status(400).json({ error: 'timestamp and studentId are required' })
+  const { records } = req.body || {}
+  if (!Array.isArray(records) || records.length === 0) {
+    return res.status(400).json({ error: 'A non-empty array of records is required' })
   }
   try {
-    const row = await restoreAttendance({
-      timestamp: String(timestamp),
-      studentId: String(studentId),
-      fullName: fullName ? String(fullName) : '',
-      faculty: faculty ? String(faculty) : '',
-      membershipStatus: membershipStatus ? String(membershipStatus) : '',
-    })
-    res.json({
-      ok: true,
-      record: row
-        ? {
-            id: row.id,
-            timestamp: row.timestamp,
-            studentId: row.student_id,
-            fullName: row.full_name || '',
-            faculty: row.faculty || '',
-            membershipStatus: row.membership_status || '',
-          }
-        : null,
-    })
+    const restored = []
+    for (const rec of records) {
+      if (!rec || !rec.timestamp || !rec.studentId) continue
+      const row = await restoreAttendance({
+        timestamp: String(rec.timestamp),
+        studentId: String(rec.studentId),
+        fullName: rec.fullName ? String(rec.fullName) : '',
+        faculty: rec.faculty ? String(rec.faculty) : '',
+        membershipStatus: rec.membershipStatus ? String(rec.membershipStatus) : '',
+      })
+      if (row) restored.push(toAttendanceRecord(row))
+    }
+    res.json({ ok: true, records: restored })
   } catch (err) {
     console.error('Admin attendance restore error:', err)
     res.status(500).json({ error: 'Server error.' })

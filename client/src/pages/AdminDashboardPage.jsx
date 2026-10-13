@@ -46,11 +46,13 @@ export default function AdminDashboardPage() {
   const exportMenuRef = useRef(null)
   const [exportOpen, setExportOpen] = useState(false)
 
-  const [confirmTarget, setConfirmTarget] = useState(null)
-  const [removingId, setRemovingId] = useState(null)
+  const [selectedIds, setSelectedIds] = useState([])
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const [pendingUndo, setPendingUndo] = useState(null)
   const [undoError, setUndoError] = useState('')
   const undoTimerRef = useRef(null)
+  const selectAllRef = useRef(null)
 
   useEffect(() => {
     if (!exportOpen) return
@@ -62,6 +64,13 @@ export default function AdminDashboardPage() {
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [exportOpen])
+
+  useEffect(() => {
+    if (selectAllRef.current) {
+      selectAllRef.current.indeterminate =
+        selectedIds.length > 0 && selectedIds.length < records.length
+    }
+  }, [selectedIds, records])
 
   useEffect(() => {
     checkAuth().then((ok) => {
@@ -82,6 +91,7 @@ export default function AdminDashboardPage() {
       ])
       setRecords(attData.records || [])
       setSummary(sumData)
+      setSelectedIds([])
     } catch (err) {
       setError(err.message)
     } finally {
@@ -218,6 +228,9 @@ export default function AdminDashboardPage() {
     setAuthenticated(false)
     setRecords([])
     setSummary({ totalAttendance: 0, activeMembers: 0, expiredMembers: 0 })
+    setSelectedIds([])
+    setPendingUndo(null)
+    setUndoError('')
   }
 
   async function handleExportExcel() {
@@ -287,28 +300,44 @@ export default function AdminDashboardPage() {
 
   useEffect(() => () => clearUndoTimer(), [])
 
-  function requestRemove(rec) {
-    setUndoError('')
-    setConfirmTarget(rec)
+  function toggleSelect(id) {
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    )
   }
 
-  async function handleConfirmRemove() {
-    const rec = confirmTarget
-    if (!rec) return
-    setConfirmTarget(null)
-    setRemovingId(rec.id)
+  function toggleSelectAll() {
+    setSelectedIds((prev) =>
+      records.length > 0 && prev.length === records.length ? [] : records.map((r) => r.id)
+    )
+  }
+
+  function requestDeleteSelected() {
+    if (selectedIds.length === 0) return
+    setUndoError('')
+    setConfirmOpen(true)
+  }
+
+  async function handleConfirmDelete() {
+    if (selectedIds.length === 0) return
+    const ids = selectedIds
+    setConfirmOpen(false)
+    setDeleting(true)
     setUndoError('')
     try {
-      const data = await removeAttendance(rec.id)
+      const data = await removeAttendance(ids)
+      const removed = data.records || []
+      const removedIds = new Set(ids)
       clearUndoTimer()
-      setRecords((prev) => prev.filter((r) => r.id !== rec.id))
+      setRecords((prev) => prev.filter((r) => !removedIds.has(r.id)))
       setSummary((prev) => ({
         ...prev,
-        totalAttendance: Math.max(0, prev.totalAttendance - 1),
+        totalAttendance: Math.max(0, prev.totalAttendance - (removed.length || ids.length)),
       }))
+      setSelectedIds([])
       setPendingUndo({
-        record: data.record || rec,
-        label: `${rec.fullName || 'Member'} · ${rec.studentId}`,
+        records: removed,
+        count: removed.length || ids.length,
       })
       undoTimerRef.current = setTimeout(() => {
         setPendingUndo(null)
@@ -317,7 +346,7 @@ export default function AdminDashboardPage() {
     } catch (err) {
       setUndoError(err.message)
     } finally {
-      setRemovingId(null)
+      setDeleting(false)
     }
   }
 
@@ -326,7 +355,7 @@ export default function AdminDashboardPage() {
     clearUndoTimer()
     setUndoError('')
     try {
-      await restoreAttendance(pendingUndo.record)
+      await restoreAttendance(pendingUndo.records)
       setPendingUndo(null)
       fetchData(filters)
     } catch (err) {
@@ -853,6 +882,32 @@ export default function AdminDashboardPage() {
           </div>
         </form>
 
+        {selectedIds.length > 0 && (
+          <div className="rounded-xl bg-metallic-800 border border-gold/40 p-3 mb-4 flex flex-wrap items-center justify-between gap-3 print:hidden">
+            <p className="text-sm text-gray-300">
+              <span className="font-semibold text-goldLight">{selectedIds.length}</span>{' '}
+              selected
+            </p>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setSelectedIds([])}
+                className="px-4 py-2 rounded-lg bg-metallic-700 border border-gray-600/50 text-gray-300 text-sm font-medium hover:bg-metallic-600 transition-all"
+              >
+                Clear
+              </button>
+              <button
+                type="button"
+                onClick={requestDeleteSelected}
+                disabled={deleting}
+                className="px-4 py-2 rounded-lg bg-red-900/50 border border-red-800/50 text-red-200 text-sm font-semibold hover:bg-red-900/70 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Delete selected
+              </button>
+            </div>
+          </div>
+        )}
+
         {loading ? (
           <div className="flex items-center justify-center py-20">
             <svg className="animate-spin h-8 w-8 text-gray-400" viewBox="0 0 24 24">
@@ -869,13 +924,22 @@ export default function AdminDashboardPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-metallic-700/80 print:bg-gray-200">
+                  <th className="py-3 px-4 w-10 print:hidden">
+                    <input
+                      ref={selectAllRef}
+                      type="checkbox"
+                      checked={records.length > 0 && selectedIds.length === records.length}
+                      onChange={toggleSelectAll}
+                      aria-label="Select all rows"
+                      className="h-4 w-4 rounded border-gray-500 bg-metallic-900 text-gold focus:ring-gold cursor-pointer"
+                    />
+                  </th>
                   <th className="text-left py-3 px-4 text-[10px] uppercase tracking-widest text-gray-400 font-medium print:text-gray-600">#</th>
                   <th className="text-left py-3 px-4 text-[10px] uppercase tracking-widest text-gray-400 font-medium print:text-gray-600">Timestamp</th>
                   <th className="text-left py-3 px-4 text-[10px] uppercase tracking-widest text-gray-400 font-medium print:text-gray-600">Student ID</th>
                   <th className="text-left py-3 px-4 text-[10px] uppercase tracking-widest text-gray-400 font-medium print:text-gray-600">Full Name</th>
                   <th className="text-left py-3 px-4 text-[10px] uppercase tracking-widest text-gray-400 font-medium print:text-gray-600">Level</th>
                   <th className="text-left py-3 px-4 text-[10px] uppercase tracking-widest text-gray-400 font-medium print:text-gray-600">Status</th>
-                  <th className="text-right py-3 px-4 text-[10px] uppercase tracking-widest text-gray-400 font-medium print:hidden">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -888,9 +952,18 @@ export default function AdminDashboardPage() {
                 ) : (
                   records.map((rec, idx) => (
                     <tr
-                      key={`${rec.timestamp}-${rec.studentId}-${idx}`}
-                      className="border-t border-gray-700/50 print:border-gray-300 hover:bg-metallic-700/30 print:hover:bg-transparent"
+                      key={rec.id}
+                      className={`border-t border-gray-700/50 print:border-gray-300 hover:bg-metallic-700/30 print:hover:bg-transparent ${selectedIds.includes(rec.id) ? 'bg-gold/5' : ''}`}
                     >
+                      <td className="py-3 px-4 print:hidden">
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.includes(rec.id)}
+                          onChange={() => toggleSelect(rec.id)}
+                          aria-label={`Select ${rec.fullName || rec.studentId}`}
+                          className="h-4 w-4 rounded border-gray-500 bg-metallic-900 text-gold focus:ring-gold cursor-pointer"
+                        />
+                      </td>
                       <td className="py-3 px-4 text-gray-500 print:text-gray-600">{idx + 1}</td>
                       <td className="py-3 px-4 text-gray-300 print:text-gray-800 whitespace-nowrap">
                         {formatTimestamp(rec.timestamp)}
@@ -901,15 +974,6 @@ export default function AdminDashboardPage() {
                       <td className="py-3 px-4 text-gray-200 print:text-gray-800">{rec.fullName}</td>
                       <td className="py-3 px-4">{levelBadge(rec.swimmingLevel)}</td>
                       <td className="py-3 px-4">{statusBadge(rec.membershipStatus)}</td>
-                      <td className="py-3 px-4 text-right print:hidden">
-                        <button
-                          onClick={() => requestRemove(rec)}
-                          disabled={removingId === rec.id}
-                          className="px-3 py-1.5 rounded-lg bg-red-900/40 border border-red-800/50 text-red-300 text-xs font-medium hover:bg-red-900/60 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          {removingId === rec.id ? 'Removing...' : 'Remove'}
-                        </button>
-                      </td>
                     </tr>
                   ))
                 )}
@@ -925,38 +989,34 @@ export default function AdminDashboardPage() {
         )}
       </div>
 
-      {confirmTarget && (
+      {confirmOpen && (
         <div className="fixed inset-0 z-40 flex items-center justify-center px-4 print:hidden">
           <div
             className="absolute inset-0 bg-black/60"
-            onClick={() => (removingId === null ? setConfirmTarget(null) : null)}
+            onClick={() => (deleting ? null : setConfirmOpen(false))}
           />
           <div className="relative w-full max-w-sm rounded-2xl bg-metallic-800 border border-gray-600/50 shadow-2xl p-6">
             <h3 className="text-base font-semibold text-gray-100 mb-2">
-              Remove from attendance?
+              Remove {selectedIds.length} record{selectedIds.length !== 1 ? 's' : ''} from attendance?
             </h3>
             <p className="text-sm text-gray-400 mb-6">
-              This removes{' '}
-              <span className="text-gray-200 font-medium">
-                {confirmTarget.fullName || 'this member'}
-              </span>
-              {confirmTarget.studentId ? ` (${confirmTarget.studentId})` : ''} from the
+              This removes the selected {selectedIds.length === 1 ? 'row' : 'rows'} from the
               attendance list. You can undo right after.
             </p>
             <div className="flex gap-3 justify-end">
               <button
-                onClick={() => setConfirmTarget(null)}
-                disabled={removingId !== null}
+                onClick={() => setConfirmOpen(false)}
+                disabled={deleting}
                 className="px-4 py-2 rounded-lg bg-metallic-700 border border-gray-600/50 text-gray-300 text-sm font-medium hover:bg-metallic-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Cancel
               </button>
               <button
-                onClick={handleConfirmRemove}
-                disabled={removingId !== null}
+                onClick={handleConfirmDelete}
+                disabled={deleting}
                 className="px-4 py-2 rounded-lg bg-red-900/60 border border-red-800/50 text-red-200 text-sm font-semibold hover:bg-red-900/80 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {removingId !== null ? 'Removing...' : 'Remove'}
+                {deleting ? 'Removing...' : 'Remove'}
               </button>
             </div>
           </div>
@@ -976,7 +1036,9 @@ export default function AdminDashboardPage() {
               ) : (
                 <>
                   Removed{' '}
-                  <span className="text-gray-100 font-medium">{pendingUndo.label}</span>
+                  <span className="text-gray-100 font-medium">
+                    {pendingUndo.count} record{pendingUndo.count !== 1 ? 's' : ''}
+                  </span>
                 </>
               )}
             </p>

@@ -42,10 +42,13 @@ export async function insertAttendance(record) {
   )
 }
 
-export async function deleteAttendance(id) {
+export async function deleteAttendance(ids) {
   const d = getPool()
-  const res = await d.query('DELETE FROM attendance WHERE id = $1 RETURNING *', [id])
-  return res.rows[0] || null
+  const res = await d.query(
+    'DELETE FROM attendance WHERE id = ANY($1::int[]) RETURNING *',
+    [ids]
+  )
+  return res.rows
 }
 
 export async function restoreAttendance(record) {

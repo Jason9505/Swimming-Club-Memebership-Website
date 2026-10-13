@@ -45,25 +45,27 @@ export async function getSummary() {
   return res.json()
 }
 
-export async function removeAttendance(id) {
-  const res = await fetch(`${API_BASE}/admin/attendance/${id}`, {
-    method: 'DELETE',
+export async function removeAttendance(ids) {
+  const res = await fetch(`${API_BASE}/admin/attendance/delete`, {
+    method: 'POST',
     credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ids }),
   })
   const data = await res.json()
-  if (!res.ok) throw new Error(data.error || 'Failed to remove record')
+  if (!res.ok) throw new Error(data.error || 'Failed to remove records')
   return data
 }
 
-export async function restoreAttendance(record) {
+export async function restoreAttendance(records) {
   const res = await fetch(`${API_BASE}/admin/attendance/restore`, {
     method: 'POST',
     credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(record),
+    body: JSON.stringify({ records }),
   })
   const data = await res.json()
-  if (!res.ok) throw new Error(data.error || 'Failed to restore record')
+  if (!res.ok) throw new Error(data.error || 'Failed to restore records')
   return data
 }
 
