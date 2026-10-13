@@ -1,11 +1,13 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { submitAttendance } from '../api/attendance'
+import { JOIN_MEMBERSHIP_URL } from '../config'
 
 export default function AttendancePage() {
   const [studentId, setStudentId] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [errorStatus, setErrorStatus] = useState(null)
   const navigate = useNavigate()
 
   async function handleSubmit(e) {
@@ -15,12 +17,14 @@ export default function AttendancePage() {
 
     setLoading(true)
     setError('')
+    setErrorStatus(null)
 
     try {
       const data = await submitAttendance(trimmed)
       navigate('/card', { state: { member: data } })
     } catch (err) {
       setError(err.message)
+      setErrorStatus(err.status || null)
     } finally {
       setLoading(false)
     }
@@ -93,7 +97,17 @@ export default function AttendancePage() {
 
         {error && (
           <div className="mt-6 p-4 rounded-xl bg-red-900/30 border border-red-800/50">
-            <p className="text-red-300 text-sm font-medium">{error}</p>
+            <p className="text-red-300 text-sm font-medium mb-4">{error}</p>
+            {errorStatus === 404 && (
+              <a
+                href={JOIN_MEMBERSHIP_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-block w-full py-3 rounded-xl font-semibold tracking-wider text-sm bg-gradient-to-r from-gold to-goldLight text-gray-900 border border-gold shadow-lg transition-all hover:opacity-90 active:scale-[0.98]"
+              >
+                Join as Membership
+              </a>
+            )}
           </div>
         )}
       </div>

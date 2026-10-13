@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import MembershipCard from '../components/MembershipCard'
 import { getMember } from '../api/attendance'
+import { JOIN_MEMBERSHIP_URL, MEMBERSHIP_RENEWAL_URL } from '../config'
 
 export default function MembershipCardPage() {
   const location = useLocation()
@@ -10,6 +11,7 @@ export default function MembershipCardPage() {
   const [member, setMember] = useState(location.state?.member || null)
   const [loading, setLoading] = useState(!location.state?.member)
   const [error, setError] = useState('')
+  const [errorStatus, setErrorStatus] = useState(null)
 
   useEffect(() => {
     if (member) return
@@ -23,7 +25,10 @@ export default function MembershipCardPage() {
 
     getMember(studentId)
       .then(setMember)
-      .catch((err) => setError(err.message))
+      .catch((err) => {
+        setError(err.message)
+        setErrorStatus(err.status || null)
+      })
       .finally(() => setLoading(false))
   }, [member, searchParams])
 
@@ -50,6 +55,16 @@ export default function MembershipCardPage() {
           <p className="text-gray-500 text-sm mb-6">
             Please check your Student ID and try again.
           </p>
+          {errorStatus === 404 && (
+            <a
+              href={JOIN_MEMBERSHIP_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block mb-3 px-6 py-3 rounded-xl bg-gradient-to-r from-gold to-goldLight text-gray-900 font-semibold hover:opacity-90 transition-all"
+            >
+              Join as Membership
+            </a>
+          )}
           <button
             onClick={() => navigate('/')}
             className="px-6 py-3 rounded-xl bg-gradient-to-r from-gray-600 to-gray-500 text-gray-100 font-semibold hover:from-gray-500 hover:to-gray-400 transition-all"
@@ -92,6 +107,16 @@ export default function MembershipCardPage() {
               ✓ You've already checked in for Today's session
             </p>
           ) : null}
+          {!member.isCommittee && member.membershipStatus === 'Expired' && (
+            <a
+              href={MEMBERSHIP_RENEWAL_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block mb-3 px-6 py-3 rounded-xl bg-gradient-to-r from-gold to-goldLight text-gray-900 font-semibold text-sm hover:opacity-90 transition-all"
+            >
+              Renew Membership
+            </a>
+          )}
           <button
             onClick={() => navigate('/')}
             className="px-6 py-3 rounded-xl bg-metallic-700 border border-gray-600/50 text-gray-300 font-medium text-sm hover:bg-metallic-600 transition-all"

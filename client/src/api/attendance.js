@@ -18,7 +18,11 @@ export async function submitAttendance(studentId) {
 export async function getMember(studentId) {
   const res = await fetch(`${API_BASE}/member/${encodeURIComponent(studentId)}`)
   const data = await res.json()
-  if (!res.ok) throw new Error(data.error || 'Something went wrong')
+  if (!res.ok) {
+    const err = new Error(data.error || 'Something went wrong')
+    err.status = res.status
+    throw err
+  }
   return data
 }
 
