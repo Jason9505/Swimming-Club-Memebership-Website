@@ -102,10 +102,6 @@ export default function MembershipCardPage() {
             <p className="text-green-400/80 text-sm font-medium mb-6">
               ✓ Attendance recorded successfully
             </p>
-          ) : member.attendanceSkipped ? (
-            <p className="text-red-300 text-sm font-medium mb-6">
-              Membership expired — attendance not recorded. Please renew to continue.
-            </p>
           ) : member.alreadyRecorded ? (
             <p className="text-gray-400 text-sm font-medium mb-6">
               ✓ You've already checked in for Today's session

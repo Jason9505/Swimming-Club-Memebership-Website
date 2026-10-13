@@ -119,8 +119,8 @@ function formatDate(dateStr) {
 
       {!isCommittee && expired && (
         <div className="rounded-2xl bg-red-900/80 border border-red-700 px-6 py-2 text-center">
-          <span className="text-red-300 font-bold text-sm tracking-wider">
-            Membership Expired
+          <span className="text-red-300 font-semibold text-sm tracking-wide">
+            Membership expired — attendance not recorded. Please renew to continue.
           </span>
         </div>
       )}
